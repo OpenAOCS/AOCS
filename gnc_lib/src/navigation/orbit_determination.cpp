@@ -119,6 +119,7 @@ void OrbitDetermination::MeasurementUpdate(
     measuredState << measurement.vec3_r_sc_eci, measurement.vec3_v_sc_eci;
 
     const Eigen::Matrix<double, 6, 6> innovationCovariance =
+    
         estimate.covariance + measurement.covariance;
     const Eigen::Matrix<double, 6, 6> kalmanGain =
         estimate.covariance * innovationCovariance.inverse();

@@ -3,10 +3,8 @@
 #include "astro/ijk_keplerian.hpp"
 #include "gnc_lib.hpp"
 #include "ipc.hpp"
-#include <Eigen/Dense>
-#include <algorithm>
+#include "sim_constants.hpp"
 #include <chrono>
-#include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -61,7 +59,7 @@ sensorMessage updateSensorModels(
     const Eigen::Vector3d position_ecef_m =
         earthRotation.gcrsToItrs * simulation.state.position_eci_m;
     const Eigen::Vector3d earthAngularVelocity_ecef_rad_s(
-        0.0, 0.0, 7.2921150e-5);
+        0.0, 0.0, SimConstants::kEarthAngularRate);
 
     sensorMessage sensors;
     sensors.GPS_position_ECEF_m = {
@@ -126,7 +124,6 @@ std::string renderTelemetry(
     constexpr int progressBarWidth = 30;
     const int progressBarFill =
         static_cast<int>(std::round(progress * progressBarWidth));
-    constexpr double kRadiansToDegrees = 180.0 / 3.14159265358979323846;
     const char* blue = useColor ? "\033[38;2;74;117;158m" : "";
     const char* orange = useColor ? "\033[38;2;204;132;82m" : "";
     const char* reset = useColor ? "\033[0m" : "";
@@ -144,14 +141,14 @@ std::string renderTelemetry(
             << blue << "Orbit: a = " << reset << orange << elements.sma << reset
             << blue << " m  e = " << reset << orange << elements.e << reset
             << blue << "  i = " << reset << orange
-            << elements.i * kRadiansToDegrees << reset << blue << " deg"
+            << elements.i * SimConstants::kRadtoDeg << reset << blue << " deg"
             << reset << '\n'
             << blue << "       RAAN = " << reset << orange
-            << elements.omega * kRadiansToDegrees << reset << blue
+            << elements.omega * SimConstants::kRadtoDeg << reset << blue
             << " deg  argp = " << reset << orange
-            << elements.argp * kRadiansToDegrees << reset << blue
+            << elements.argp * SimConstants::kRadtoDeg << reset << blue
             << " deg  nu = " << reset << orange
-            << elements.nu * kRadiansToDegrees << reset << blue << " deg"
+            << elements.nu * SimConstants::kRadtoDeg << reset << blue << " deg"
             << reset << '\n'
             << std::setprecision(1)
             << blue << std::left << std::setw(20) << "ECI position [m]:"

@@ -1,0 +1,9 @@
+Scenario:
+    name: gps_fault_test
+    description: "Test scenario for GPS fault conditions"
+    events:
+      simulation_time: 1800
+      type: sensor_fault
+      sensor: gps
+      fault_type: invalid
+      duration: 600
