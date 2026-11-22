@@ -47,8 +47,8 @@ const std::vector<common::ColumnSchema>& columns() {
         addDoubleField("estimate_v_x_m_s");
         addDoubleField("estimate_v_y_m_s");
         addDoubleField("estimate_v_z_m_s");
-        for (std::size_t row = 0; row < aocs::ipc::kStateDimension; ++row) {
-            for (std::size_t col = 0; col < aocs::ipc::kStateDimension; ++col) {
+        for (std::size_t row = 0; row < 6; ++row) {
+            for (std::size_t col = 0; col < 6; ++col) {
                 addDoubleField(
                     "cov_" + std::to_string(row) + "_" +
                     std::to_string(col));
@@ -142,7 +142,7 @@ struct FileWriter::Impl {
         const Eigen::Vector3d& position_eci_m,
         const Eigen::Vector3d& velocity_eci_m_s,
         const sensorMessage& sensors,
-        const navigationEstimateMessage& estimate) {
+        const navigationMessage& estimate) {
         if (closed) {
             throw std::logic_error("Cannot write to a closed TsFile");
         }
@@ -170,7 +170,7 @@ struct FileWriter::Impl {
         addValue("v_z_m_s", velocity_eci_m_s.z());
         addValue(
             "gps_time_s",
-            sensors.GPS_time_s - aocs::ipc::kGpsSecondsAtJ2000 -
+            sensors.GPS_time_s - SimConstants::kGpsSecondsAtJ2000 -
                 epoch_J2000_s);
         addValue(
             "gps_measurement_updated",
@@ -191,9 +191,9 @@ struct FileWriter::Impl {
              ++index) {
             addValue(
                 "cov_" + std::to_string(
-                             index / aocs::ipc::kStateDimension) +
+                             index / 6) +
                     "_" + std::to_string(
-                              index % aocs::ipc::kStateDimension),
+                              index % 6),
                 estimate.covariance_row_major[index]);
         }
 
@@ -268,7 +268,7 @@ void FileWriter::writeState(
     const Eigen::Vector3d& position_eci_m,
     const Eigen::Vector3d& velocity_eci_m_s,
     const sensorMessage& sensors,
-    const navigationEstimateMessage& estimate) {
+    const navigationMessage& estimate) {
     impl_->writeState(
         epoch_J2000_s,
         elapsedTime_s,

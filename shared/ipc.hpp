@@ -1,9 +1,7 @@
 #pragma once
 
-#include <array>
 #include <cerrno>
 #include <cstring>
-#include <cstdint>
 #include <fcntl.h>
 #include <functional>
 #include <new>
@@ -14,42 +12,25 @@
 #include <unistd.h>
 #include <utility>
 
-#define SHM_NAME "/sim_shm_w0"
+#include "aocs_to_sim.hpp"
+#include "sim_to_aocs.hpp"
 
 namespace aocs::ipc {
 
-inline constexpr double kGpsSecondsAtJ2000 = 630763200.0;
-inline constexpr std::size_t kStateDimension = 6;
+inline constexpr char kSharedMemoryName[] = "/sim_shm_w0";
 
-}
-
-struct sensorMessage {
-    std::array<double, 3> GPS_position_ECEF_m{};
-    std::array<double, 3> GPS_velocity_ECEF_m_s{};
-    double GPS_time_s = 0.0;
-    double aocs_time_J2000_s = 0.0;
-    std::uint32_t has_new_GPS_measurement = 0;
-    std::array<double, aocs::ipc::kStateDimension * aocs::ipc::kStateDimension>
-        GPS_covariance_row_major{};
-};
-
-struct navigationEstimateMessage {
-    std::uint32_t valid = 0;
-    double time_J2000_s = 0.0;
-    std::array<double, 3> position_ECI_m{};
-    std::array<double, 3> velocity_ECI_m_s{};
-    std::array<double, aocs::ipc::kStateDimension * aocs::ipc::kStateDimension>
-        covariance_row_major{};
-};
+} // namespace aocs::ipc
 
 struct sharedMemoryMap {
-    sensorMessage sensorData;
-    navigationEstimateMessage navigationEstimate;
+    AOCSMemoryRegion aocsMemoryRegion;
+    SimMemoryRegion simMemoryRegion;
 };
 
 class SharedMemoryRegion {
 public:
-    explicit SharedMemoryRegion(const std::string& name = SHM_NAME) : name_(name) {
+    explicit SharedMemoryRegion(
+        const std::string& name = aocs::ipc::kSharedMemoryName)
+        : name_(name) {
         descriptor_ = shm_open(name_.c_str(), O_CREAT | O_RDWR, 0600);
         if (descriptor_ == -1) {
             throw std::runtime_error(
@@ -152,7 +133,7 @@ public:
     }
 
     int exchange(const sensorMessage& input) override {
-        memory_.sensorData = input;
+        memory_.simMemoryRegion.sensorData = input;
         return gncEntryPoint_(memory_);
     }
 

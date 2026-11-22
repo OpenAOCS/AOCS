@@ -43,16 +43,31 @@ navigation::NavigationInput mapNavigationInput(const sensorMessage& sensors) {
     measurement.vec3_r_sc_eci = ecefToEci * position_ecef_m;
     measurement.vec3_v_sc_eci = ecefToEci * (velocity_ecef_m_s + earthAngularVelocity_ecef_rad_s.cross(position_ecef_m));
 
-    measurement.covariance =
+    const navigation::StateCovariance covarianceEcef =
         Eigen::Map<const navigation::StateCovariance>(
             sensors.GPS_covariance_row_major.data());
+    Eigen::Matrix<double, 6, 6> ecefStateToEci =
+        Eigen::Matrix<double, 6, 6>::Identity();
+    Eigen::Matrix3d angularRateCross;
+    angularRateCross << 0.0, -earthAngularVelocity_ecef_rad_s.z(),
+        earthAngularVelocity_ecef_rad_s.y(),
+        earthAngularVelocity_ecef_rad_s.z(), 0.0,
+        -earthAngularVelocity_ecef_rad_s.x(),
+        -earthAngularVelocity_ecef_rad_s.y(),
+        earthAngularVelocity_ecef_rad_s.x(), 0.0;
+    ecefStateToEci.block<3, 3>(0, 0) = ecefToEci;
+    ecefStateToEci.block<3, 3>(3, 0) =
+        ecefToEci * angularRateCross;
+    ecefStateToEci.block<3, 3>(3, 3) = ecefToEci;
+    measurement.covariance =
+        ecefStateToEci * covarianceEcef * ecefStateToEci.transpose();
     input.gpsMeasurement = std::move(measurement);
     return input;
 }
 
 void mapNavigationOutputToIpc(
     const navigation::InertialStateEstimate& estimate,
-    navigationEstimateMessage& message) {
+    navigationMessage& message) {
     message.valid = 0;
     if (!std::isfinite(estimate.t_estimate_J2000_s) ||
         !estimate.vec3_r_sc_eci.allFinite() ||
@@ -62,9 +77,7 @@ void mapNavigationOutputToIpc(
     }
 
     message.time_J2000_s = estimate.t_estimate_J2000_s;
-    for (Eigen::Index axis = 0;
-         axis < static_cast<Eigen::Index>(ipc::kStateDimension / 2);
-         ++axis) {
+    for (Eigen::Index axis = 0; axis < static_cast<Eigen::Index>(3); ++axis) {
         const std::size_t index = static_cast<std::size_t>(axis);
         message.position_ECI_m[index] = estimate.vec3_r_sc_eci(axis);
         message.velocity_ECI_m_s[index] = estimate.vec3_v_sc_eci(axis);
@@ -85,12 +98,12 @@ GNCExecutive initializeGnc() {
 }
 
 int runGncStep(GNCExecutive& executive, sharedMemoryMap& sharedMemory) {
-    navigationEstimateMessage& navigationMessage =
-        sharedMemory.navigationEstimate;
-    navigationMessage.valid = 0;
+    navigationMessage& navigationOutput =
+        sharedMemory.aocsMemoryRegion.navigationEstimate;
+    navigationOutput.valid = 0;
 
     const navigation::NavigationInput inputs =
-        mapNavigationInput(sharedMemory.sensorData);
+        mapNavigationInput(sharedMemory.simMemoryRegion.sensorData);
     executive.stateMachine.evaluate(inputs.gpsMeasurement.has_value());
     if (!executive.stateMachine.navigationReady()) {
         return 1;
@@ -102,8 +115,8 @@ int runGncStep(GNCExecutive& executive, sharedMemoryMap& sharedMemory) {
         return 1;
     }
 
-    mapNavigationOutputToIpc(*estimate, navigationMessage);
-    return navigationMessage.valid == 1 ? 0 : 1;
+    mapNavigationOutputToIpc(*estimate, navigationOutput);
+    return navigationOutput.valid == 1 ? 0 : 1;
 }
 
 } // namespace aocs

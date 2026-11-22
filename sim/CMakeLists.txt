@@ -1,6 +1,8 @@
 add_executable(sim
     main.cpp
     environment.cpp
+    sensors.cpp
+    simulation.cpp
     initialization.cpp
     data/file_writer.cpp
     data/telemetry_writer.cpp
@@ -92,6 +94,7 @@ set_target_properties(aocs_orbit PROPERTIES
 if(BUILD_TESTING)
     add_executable(sim_math_tests
         tests/math_tests.cpp
+        sensors.cpp
     )
     target_include_directories(sim_math_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include

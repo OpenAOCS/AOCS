@@ -1,7 +1,8 @@
 #pragma once
 
 #include <Eigen/Dense>
-#include "ipc.hpp"
+#include "aocs_to_sim.hpp"
+#include "sim_to_aocs.hpp"
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -24,7 +25,7 @@ public:
         const Eigen::Vector3d& position_eci_m,
         const Eigen::Vector3d& velocity_eci_m_s,
         const sensorMessage& sensors,
-        const navigationEstimateMessage& estimate);
+        const navigationMessage& estimate);
     void close();
 
 private:

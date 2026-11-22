@@ -9,11 +9,18 @@
         "orbit_count": 2,
         "true_state_rate_hz": 100,
         "aocs_rate_hz": 10,
-        "log_rate_hz": 10,
-        "gps_rate_hz": 1
+        "log_rate_hz": 10
     },
     "spacecraft": {
-        "mass_kg": 100.0
+        "mass_kg": 100.0,
+        "sensors": {
+            "gps": {
+                "rate_hz": 1,
+                "radial_accuracy_m": 1.0,
+                "intrack_accuracy_m": 10.0,
+                "cross_track_accuracy_m": 1.0
+            }
+        }
     },
     "environment": {
         "gravity": {

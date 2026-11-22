@@ -1,11 +1,22 @@
 #pragma once
 
+#include "environment/earth_gravity/gravity.hpp"
+#include "sim_to_aocs.hpp"
+
 #include <Eigen/Dense>
+#include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <functional>
+#include <memory>
 #include <stdexcept>
+#include <string>
 
 namespace aocs::simulation {
+
+namespace data {
+class FileWriter;
+}
 
 struct SpacecraftState {
     Eigen::Vector3d position_eci_m;
@@ -94,6 +105,122 @@ public:
         RK4::integrate(state, elapsedTime_s, dt_sec, acceleration);
         elapsedTime_s += dt_sec;
     }
+};
+
+class Simulation {
+public:
+    class Environment {
+    public:
+        struct Config {
+            GravityModel gravityModel = GravityModel::E_PointMass;
+            std::uint32_t gravityDegree = 0;
+            std::uint32_t gravityOrder = 0;
+            std::string coefficientsPath =
+                "data/earth_gravity/emg2008_coefficients.bin";
+        };
+
+        explicit Environment(const Config& config);
+
+        Eigen::Vector3d computeForceEci(
+            const SpacecraftState& state,
+            double epoch_J2000_s,
+            double elapsedTime_s,
+            double mass_kg) const;
+
+    private:
+        Config config_;
+        std::unique_ptr<EGM2008Coefficients> coefficients_;
+        std::unique_ptr<Gravity> gravity_;
+    };
+
+    class Sensors {
+    public:
+        class GPS {
+        public:
+            struct Config {
+                double rate_Hz = 0.0;
+                double radialAccuracy_m = 0.0;
+                double inTrackAccuracy_m = 0.0;
+                double crossTrackAccuracy_m = 0.0;
+            };
+
+            explicit GPS(const Config& config);
+
+            sensorMessage measure(
+                const SpacecraftState& state,
+                double epoch_J2000_s) const;
+
+            double rate_Hz() const { return config_.rate_Hz; }
+
+        private:
+            Config config_;
+        };
+
+        struct Config {
+            GPS::Config gps;
+        };
+
+        explicit Sensors(const Config& config) : gps(config.gps) {}
+
+        GPS gps;
+    };
+
+    class Actuators {
+    public:
+        struct Config {};
+
+        explicit Actuators(const Config&) {}
+
+        Eigen::Vector3d netForceBody_N = Eigen::Vector3d::Zero();
+        Eigen::Vector3d netTorqueBody_Nm = Eigen::Vector3d::Zero();
+    };
+
+    struct Config {
+        struct InitialConditions {
+            Eigen::Vector3d position_eci_m = Eigen::Vector3d::Zero();
+            Eigen::Vector3d velocity_eci_m_s = Eigen::Vector3d::Zero();
+            double epoch_J2000_s = 0.0;
+        } initialConditions;
+
+        struct Timing {
+            std::uint32_t orbitCount = 0;
+            double trueStateRate_Hz = 0.0;
+            double aocsRate_Hz = 0.0;
+            double logRate_Hz = 0.0;
+        } timing;
+
+        struct Spacecraft {
+            double mass_kg = 0.0;
+        } spacecraft;
+
+        Environment::Config environment;
+        Sensors::Config sensors;
+        Actuators::Config actuators;
+    };
+
+    explicit Simulation(const Config& config);
+    ~Simulation();
+
+    void Step();
+
+    SpacecraftState state;
+    double epoch_J2000_s = 0.0;
+    double elapsedTime_s = 0.0;
+    double simulationLength_s = 0.0;
+    double dt_sec = 0.0;
+    std::uint64_t aocsIntervalSteps = 0;
+    std::uint64_t logIntervalSteps = 0;
+    std::uint64_t gpsSampleIntervalSteps = 0;
+    double mass_kg = 0.0;
+    std::chrono::steady_clock::time_point sim_start;
+    Environment environment;
+    Sensors sensors;
+    Actuators actuators;
+    std::unique_ptr<data::FileWriter> outputFile;
+    bool running = true;
+
+private:
+    Propagation propagation_;
 };
 
 } // namespace aocs::simulation

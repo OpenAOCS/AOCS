@@ -7,6 +7,7 @@
 #include "simulation/simulation.hpp"
 #include "sim_constants.hpp"
 
+#include <Eigen/Eigenvalues>
 #include <cmath>
 #include <iomanip>
 #include <iostream>
@@ -158,6 +159,40 @@ void testRK4Propagation() {
                 "RK4 propagation must advance elapsed simulation time");
 }
 
+void testGpsModelUsesConfiguredRtnAccuracy() {
+    using aocs::simulation::Simulation;
+    using aocs::simulation::SpacecraftState;
+
+    Simulation::Sensors::GPS::Config config;
+    config.rate_Hz = 1.0;
+    config.radialAccuracy_m = 2.0;
+    config.inTrackAccuracy_m = 10.0;
+    config.crossTrackAccuracy_m = 3.0;
+    const Simulation::Sensors::GPS gps(config);
+    const SpacecraftState state{
+        Eigen::Vector3d(7.0e6, 0.0, 0.0),
+        Eigen::Vector3d(0.0, 7500.0, 0.0)};
+    const sensorMessage measurement = gps.measure(state, 100.0);
+    const Eigen::Map<const Eigen::Matrix<double, 6, 6, Eigen::RowMajor>>
+        covariance(measurement.GPS_covariance_row_major.data());
+    const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> positionEigenvalues(
+        covariance.block<3, 3>(0, 0));
+
+    require(positionEigenvalues.info() == Eigen::Success,
+            "GPS position covariance must be symmetric and finite");
+    requireNear(positionEigenvalues.eigenvalues()(0), 4.0, 1e-10,
+                "GPS covariance must use configured radial accuracy");
+    requireNear(positionEigenvalues.eigenvalues()(1), 9.0, 1e-10,
+                "GPS covariance must use configured cross-track accuracy");
+    requireNear(positionEigenvalues.eigenvalues()(2), 100.0, 1e-10,
+                "GPS covariance must use configured in-track accuracy");
+    require((covariance.block<3, 3>(3, 3) -
+             Eigen::Matrix3d::Identity()).norm() == 0.0,
+            "GPS velocity covariance must preserve the existing placeholder");
+    require(measurement.has_new_GPS_measurement == 1,
+            "GPS model must mark a sampled measurement as new");
+}
+
 void testRtnProcessNoiseUsesOrthogonalConfiguredAxes() {
     using aocs::navigation::InertialStateEstimate;
     using aocs::navigation::OrbitDetermination;
@@ -199,7 +234,7 @@ void testRtnProcessNoiseUsesOrthogonalConfiguredAxes() {
 sensorMessage receivedSensorMessage;
 
 int captureSensorMessage(sharedMemoryMap& memory) {
-    receivedSensorMessage = memory.sensorData;
+    receivedSensorMessage = memory.simMemoryRegion.sensorData;
     return 0;
 }
 
@@ -246,7 +281,8 @@ void testSharedMemoryRegionRecoversStaleObject() {
 
     {
         SharedMemoryRegion recoveredRegion(name);
-        require(recoveredRegion.data().navigationEstimate.valid == 0,
+        require(recoveredRegion.data()
+                    .aocsMemoryRegion.navigationEstimate.valid == 0,
         "Stale shared-memory contents must be reinitialized");
         bool rejectedConcurrentOwner = false;
         try {
@@ -266,25 +302,27 @@ void testSharedMemoryRegionRecoversStaleObject() {
 void testGncStateEstimatePublication() {
     aocs::GNCExecutive executive = aocs::initializeGnc();
     sharedMemoryMap memory{};
-    sensorMessage& input = memory.sensorData;
+    sensorMessage& input = memory.simMemoryRegion.sensorData;
     const double t_J2000_s = 100.0;
-    input.GPS_time_s = t_J2000_s + aocs::ipc::kGpsSecondsAtJ2000;
+    input.GPS_time_s = t_J2000_s + SimConstants::kGpsSecondsAtJ2000;
     input.aocs_time_J2000_s = t_J2000_s;
     input.has_new_GPS_measurement = 1;
     input.GPS_position_ECEF_m = {7000000.0, 1000.0, -2000.0};
     input.GPS_velocity_ECEF_m_s = {1.0, 7500.0, -2.0};
-    for (std::size_t axis = 0; axis < aocs::ipc::kStateDimension; ++axis) {
+    for (std::size_t axis = 0; axis < 6; ++axis) {
         input.GPS_covariance_row_major[
-            axis * aocs::ipc::kStateDimension + axis] = 1.0;
+            axis * 6 + axis] = 1.0;
     }
     input.GPS_covariance_row_major[1] = 0.25;
-    input.GPS_covariance_row_major[aocs::ipc::kStateDimension] = 0.25;
+    input.GPS_covariance_row_major[6] = 0.25;
 
     require(aocs::runGncStep(executive, memory) == 0,
             "GNC step must publish its initial GPS-based estimate");
-    require(memory.navigationEstimate.valid == 1,
+    const navigationMessage& estimate =
+        memory.aocsMemoryRegion.navigationEstimate;
+    require(estimate.valid == 1,
             "GNC must mark its published estimate valid");
-    requireNear(memory.navigationEstimate.time_J2000_s, t_J2000_s, 1e-12,
+    requireNear(estimate.time_J2000_s, t_J2000_s, 1e-12,
         "Published estimate must use seconds since J2000");
 
     const Eigen::Matrix3d ecefToEci =
@@ -301,58 +339,75 @@ void testGncStateEstimatePublication() {
     const Eigen::Vector3d expectedPosition = ecefToEci * position_ecef;
     const Eigen::Vector3d expectedVelocity =
         ecefToEci * (velocity_ecef + omega_ecef.cross(position_ecef));
+    Eigen::Matrix<double, 6, 6> ecefToEciState =
+        Eigen::Matrix<double, 6, 6>::Identity();
+    Eigen::Matrix3d omegaCross;
+    omegaCross << 0.0, -omega_ecef.z(), omega_ecef.y(),
+        omega_ecef.z(), 0.0, -omega_ecef.x(),
+        -omega_ecef.y(), omega_ecef.x(), 0.0;
+    ecefToEciState.block<3, 3>(0, 0) = ecefToEci;
+    ecefToEciState.block<3, 3>(3, 0) = ecefToEci * omegaCross;
+    ecefToEciState.block<3, 3>(3, 3) = ecefToEci;
+    Eigen::Matrix<double, 6, 6> covarianceEcef =
+        Eigen::Matrix<double, 6, 6>::Identity();
+    covarianceEcef(0, 1) = 0.25;
+    covarianceEcef(1, 0) = 0.25;
+    const Eigen::Matrix<double, 6, 6> expectedCovariance =
+        ecefToEciState * covarianceEcef * ecefToEciState.transpose();
 
     for (std::size_t axis = 0; axis < 3; ++axis) {
         requireNear(
-            memory.navigationEstimate.position_ECI_m[axis],
+            estimate.position_ECI_m[axis],
             expectedPosition(static_cast<Eigen::Index>(axis)),
             1e-9,
             "Published position must be converted from ECEF to ECI");
         requireNear(
-            memory.navigationEstimate.velocity_ECI_m_s[axis],
+            estimate.velocity_ECI_m_s[axis],
             expectedVelocity(static_cast<Eigen::Index>(axis)),
             1e-12,
             "Published velocity must include Earth-rotation conversion");
     }
-    requireNear(memory.navigationEstimate.covariance_row_major[1], 0.25, 0.0,
-        "Published covariance must preserve row-major measurement data");
+    const Eigen::Map<const Eigen::Matrix<double, 6, 6, Eigen::RowMajor>>
+        publishedCovariance(estimate.covariance_row_major.data());
+    require((publishedCovariance - expectedCovariance).norm() < 1e-12,
+            "Published covariance must be transformed from ECEF to ECI");
 
     input.has_new_GPS_measurement = 0;
     input.aocs_time_J2000_s = t_J2000_s + 0.1;
     require(aocs::runGncStep(executive, memory) == 0,
             "GNC must propagate between GPS measurements");
-    requireNear(memory.navigationEstimate.time_J2000_s, t_J2000_s + 0.1,
+    requireNear(estimate.time_J2000_s, t_J2000_s + 0.1,
         1e-12,
         "GNC must propagate its estimate at the AOCS timestep");
     const Eigen::Vector3d propagatedPosition(
-        memory.navigationEstimate.position_ECI_m[0],
-        memory.navigationEstimate.position_ECI_m[1],
-        memory.navigationEstimate.position_ECI_m[2]);
+        estimate.position_ECI_m[0],
+        estimate.position_ECI_m[1],
+        estimate.position_ECI_m[2]);
     require((propagatedPosition - expectedPosition).norm() > 1.0,
             "GNC must propagate position between GPS updates");
     const double largestCovarianceMagnitude =
         Eigen::Map<const Eigen::Matrix<double, 6, 6, Eigen::RowMajor>>(
-            memory.navigationEstimate.covariance_row_major.data())
+            estimate.covariance_row_major.data())
             .cwiseAbs()
             .maxCoeff();
     require(largestCovarianceMagnitude < 10.0,
             "Gravity-gradient covariance propagation must remain bounded for a 0.1 s step");
     require(
-        memory.navigationEstimate.covariance_row_major[3 * 6 + 3] > 1.0,
+        estimate.covariance_row_major[3 * 6 + 3] > 1.0,
         "Acceleration process noise must contribute to propagated velocity covariance");
 
     input.aocs_time_J2000_s = t_J2000_s + 0.2;
     input.GPS_time_s =
-        input.aocs_time_J2000_s + aocs::ipc::kGpsSecondsAtJ2000;
+        input.aocs_time_J2000_s + SimConstants::kGpsSecondsAtJ2000;
     input.has_new_GPS_measurement = 1;
     const double covarianceBeforeGpsUpdate =
         Eigen::Map<const Eigen::Matrix<double, 6, 6, Eigen::RowMajor>>(
-            memory.navigationEstimate.covariance_row_major.data())(0, 0);
+            estimate.covariance_row_major.data())(0, 0);
     require(aocs::runGncStep(executive, memory) == 0,
             "GNC must process a subsequent GPS update");
     const double covarianceAfterGpsUpdate =
         Eigen::Map<const Eigen::Matrix<double, 6, 6, Eigen::RowMajor>>(
-            memory.navigationEstimate.covariance_row_major.data())(0, 0);
+            estimate.covariance_row_major.data())(0, 0);
     require(covarianceAfterGpsUpdate > 0.5 &&
                 covarianceAfterGpsUpdate < covarianceBeforeGpsUpdate,
             "GPS update must reduce the propagated covariance without replacing the prior covariance");
@@ -365,6 +420,7 @@ int main() {
         testQuaternion();
         testIau2000B();
         testRK4Propagation();
+        testGpsModelUsesConfiguredRtnAccuracy();
         testRtnProcessNoiseUsesOrthogonalConfiguredAxes();
         testSharedMemoryGncTransport();
         testSharedMemoryRegionRecoversStaleObject();

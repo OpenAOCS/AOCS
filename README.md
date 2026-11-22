@@ -48,11 +48,18 @@ messages into internal navigation inputs, evaluates the GNC state machine,
 and calls the navigation step. Navigation owns the orbit-determination
 instance, initializes from the first GPS measurement, and propagates the
 estimate between measurements. The boundary maps the resulting ECI state and
-6x6 covariance back into `sharedMemoryMap::navigationEstimate`; its `valid`
-field indicates whether the estimate is usable. Guidance and control steps
-are not implemented yet. The simulation currently supplies an identity GPS
-measurement covariance as a placeholder; replace it with the sensor model's
-covariance when available.
+6x6 covariance back into `sharedMemoryMap::aocsMemoryRegion.navigationEstimate`;
+the message's `valid` field indicates whether the estimate is usable. Guidance
+and control steps are not implemented yet. The simulation currently supplies
+the configured radial, in-track, and cross-track GPS position accuracies;
+velocity covariance remains an identity placeholder. `Simulation` owns its
+environment, sensors (including GPS), and actuators, and advances the state
+with RK4 in `Simulation::Step()`. Configuration is parsed into typed nested
+structures before constructing those components. Actuators retain body-frame
+force and torque sums; rotational dynamics are not modeled yet. Message layouts
+are split by flow: `sim_to_aocs.hpp` defines simulation inputs,
+`aocs_to_sim.hpp` defines GNC outputs, and `ipc.hpp` provides shared-memory
+transport.
 `sim/main.cpp` owns simulation orchestration, while `sim/environment.cpp`
 computes environmental forces for propagation.
 The GNC acceleration process-noise spectral density is configured internally
@@ -88,10 +95,10 @@ measurements are sampled at 1 Hz and held between updates. The output
 nanoseconds; the `t_sec` field remains elapsed simulation seconds. CMake
 fetches Apache TsFile v2.5.0 for the native writer, and the Python `tsfile`
 package reads it into a pandas DataFrame for plotting. Configure
-`true_state_rate_hz`, `aocs_rate_hz`, `log_rate_hz`, and `gps_rate_hz` under
-`simulation` in `config.json`. The
-true-state rate must be an integer multiple of the AOCS and log rates, and the
-AOCS rate must be an integer multiple of the GPS rate.
+`true_state_rate_hz`, `aocs_rate_hz`, and `log_rate_hz` under `simulation`,
+and GPS rate and position accuracies under `spacecraft.sensors.gps` in
+`config.json`. The true-state rate must be an integer multiple of the AOCS and
+log rates, and the AOCS rate must be an integer multiple of the GPS rate.
 
 After running the simulation, generate the interactive report from the
 repository root:
