@@ -1,11 +1,12 @@
 #include <Eigen/Dense>
 #include <random>
+#include <cstdint>
 #include "xoshiro.hpp"
 
 /*
 Version 1.0 | George Martin | 20261121
 
-This class is used to fill a pre-allocated matrix with random values, using the Xoshiro random value algorithm.
+This class is used to fill a pre-allocated matrix with random values, using the Xoshiro random value algorithm. Intended use is as an inherited class of a sensor module.
 
 Values are Gaussian, with a mean of 0 and standard deviation of 1.
 
@@ -16,10 +17,6 @@ class RandomMatrix
 {
 public:
     static_assert(Rows > 0 && Cols > 0, "Rows and Cols must be positive compile-time constants.");
-
-    FixedRandomMatrixFiller(Eigen::Matrix<Scalar, Rows, Cols>& target, XoshiroCpp::Xoshiro256PlusPlus& seed) noexcept
-        : target_(target), seed(seed)
-    {}
 
     explicit RandomMatrix(Eigen::Matrix<Scalar, Rows, Cols>& target, uint64_t seed)
             : target_(target), rng_(seed) {}
@@ -34,6 +31,6 @@ public:
 
 private:
     Eigen::Matrix<Scalar, Rows, Cols>& target_;
-    XoshiroCpp::Xoshiro256PlusPlus& rng_;
+    XoshiroCpp::Xoshiro256PlusPlus rng_;
     std::normal_distribution<double> gaussian_{0.0,1.0}; // mean = 0.0, standard deviation = 1.0
 };

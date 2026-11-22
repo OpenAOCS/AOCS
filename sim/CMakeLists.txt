@@ -1,6 +1,9 @@
 add_executable(sim
     main.cpp
+    environment.cpp
     initialization.cpp
+    data/file_writer.cpp
+    data/telemetry_writer.cpp
 )
 
 configure_file(${PROJECT_SOURCE_DIR}/config.json config.json COPYONLY)
