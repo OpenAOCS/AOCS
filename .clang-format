@@ -1,0 +1,27 @@
+BasedOnStyle: LLVM
+Language: Cpp
+Standard: c++17
+
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 128
+
+# Align `=` across consecutive declarations and assignments
+AlignConsecutiveAssignments:
+  Enabled: true
+  AcrossEmptyLines: true
+  AcrossComments: true
+
+# Keep compact rows and allow longer single-line functions
+AllowShortFunctionsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: Always
+AllowShortLoopsOnASingleLine: true
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortBlocksOnASingleLine: Always
+BinPackArguments: true
+BinPackParameters: true
+
+# Pointer/reference alignment and brace style
+PointerAlignment: Left
+BreakBeforeBraces: Attach

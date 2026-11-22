@@ -1,0 +1,37 @@
+name: C++ static analysis
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  clang-tidy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            clang-tidy \
+            libjsoncpp-dev \
+            ninja-build \
+            pybind11-dev \
+            python3-dev
+
+      - name: Configure with clang-tidy
+        run: >
+          cmake -S . -B build -G Ninja
+          -DAOCS_ENABLE_CLANG_TIDY=ON
+
+      - name: Build and analyze
+        run: >
+          cmake --build build --parallel 4
+          --target gnc_lib sim sim_math_tests aocs_orbit
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure

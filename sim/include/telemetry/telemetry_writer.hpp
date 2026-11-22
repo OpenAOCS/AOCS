@@ -6,10 +6,7 @@ struct Simulation;
 
 namespace data {
 
-void publishTelemetry(
-    const Simulation& simulation,
-    bool interactive,
-    bool& hasDrawnTelemetry);
+void publishTelemetry(const Simulation& simulation, bool interactive, bool& hasDrawnTelemetry);
 
 } // namespace data
 } // namespace aocs::simulation

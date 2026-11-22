@@ -11,16 +11,12 @@ struct NavigationInput {
 };
 
 class Navigation {
-public:
-    Navigation(
-        OrbitDeterminationMethod method,
-        const Eigen::Vector3d&
-            accelerationProcessNoiseSpectralDensityRTN_m2_s3);
+  public:
+    Navigation(OrbitDeterminationMethod method, const Eigen::Vector3d& accelerationProcessNoiseSpectralDensityRTN_m2_s3);
 
-    std::optional<InertialStateEstimate> runStep(
-        const NavigationInput& input);
+    std::optional<InertialStateEstimate> runStep(const NavigationInput& input);
 
-private:
+  private:
     OrbitDetermination orbitDetermination;
     bool hasInitialEstimate = false;
 };

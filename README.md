@@ -32,6 +32,21 @@ cmake -S . -B build -G Ninja
 cmake --build build
 ```
 
+For optional static analysis, install `clang-tidy` and enable it when
+configuring:
+
+```sh
+cmake -S . -B build -DAOCS_ENABLE_CLANG_TIDY=ON
+cmake --build build --target gnc_lib sim sim_math_tests aocs_orbit
+```
+
+The GNC library uses the more portability-focused
+[`gnc_lib/.clang-tidy`](./gnc_lib/.clang-tidy) profile; the desktop simulation
+and its tools use [`sim/.clang-tidy`](./sim/.clang-tidy). Findings are warnings,
+not build failures. The same profiles run in the GitHub Actions workflow on
+pushes and pull requests; the separately configured Apache TsFile dependency is
+not included.
+
 Run the simulation from the repository root:
 
 ```sh

@@ -4,6 +4,7 @@ add_library(gnc_lib STATIC
     src/navigation/navigation.cpp
     src/navigation/orbit_determination.cpp
 )
+aocs_enable_clang_tidy(gnc_lib "${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy")
 
 target_include_directories(gnc_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}

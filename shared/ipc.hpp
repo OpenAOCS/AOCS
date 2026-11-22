@@ -27,44 +27,32 @@ struct sharedMemoryMap {
 };
 
 class SharedMemoryRegion {
-public:
-    explicit SharedMemoryRegion(
-        const std::string& name = aocs::ipc::kSharedMemoryName)
-        : name_(name) {
+  public:
+    explicit SharedMemoryRegion(const std::string& name = aocs::ipc::kSharedMemoryName) : name_(name) {
         descriptor_ = shm_open(name_.c_str(), O_CREAT | O_RDWR, 0600);
         if (descriptor_ == -1) {
-            throw std::runtime_error(
-                "Unable to create shared memory " + name_ + ": " +
-                std::strerror(errno));
+            throw std::runtime_error("Unable to create shared memory " + name_ + ": " + std::strerror(errno));
         }
 
         if (flock(descriptor_, LOCK_EX | LOCK_NB) == -1) {
             const int error = errno;
             close(descriptor_);
             descriptor_ = -1;
-            throw std::runtime_error(
-                "Unable to lock shared memory " + name_ + ": " +
-                std::strerror(error));
+            throw std::runtime_error("Unable to lock shared memory " + name_ + ": " + std::strerror(error));
         }
         lockHeld_ = true;
 
         if (ftruncate(descriptor_, sizeof(sharedMemoryMap)) == -1) {
             const int error = errno;
             cleanup();
-            throw std::runtime_error(
-                "Unable to size shared memory " + name_ + ": " +
-                std::strerror(error));
+            throw std::runtime_error("Unable to size shared memory " + name_ + ": " + std::strerror(error));
         }
 
-        void* const mapping =
-            mmap(nullptr, sizeof(sharedMemoryMap), PROT_READ | PROT_WRITE,
-                 MAP_SHARED, descriptor_, 0);
+        void* const mapping = mmap(nullptr, sizeof(sharedMemoryMap), PROT_READ | PROT_WRITE, MAP_SHARED, descriptor_, 0);
         if (mapping == MAP_FAILED) {
             const int error = errno;
             cleanup();
-            throw std::runtime_error(
-                "Unable to map shared memory " + name_ + ": " +
-                std::strerror(error));
+            throw std::runtime_error("Unable to map shared memory " + name_ + ": " + std::strerror(error));
         }
 
         try {
@@ -84,16 +72,14 @@ public:
         cleanup();
     }
 
-    SharedMemoryRegion(const SharedMemoryRegion&) = delete;
+    SharedMemoryRegion(const SharedMemoryRegion&)            = delete;
     SharedMemoryRegion& operator=(const SharedMemoryRegion&) = delete;
-    SharedMemoryRegion(SharedMemoryRegion&&) = delete;
-    SharedMemoryRegion& operator=(SharedMemoryRegion&&) = delete;
+    SharedMemoryRegion(SharedMemoryRegion&&)                 = delete;
+    SharedMemoryRegion& operator=(SharedMemoryRegion&&)      = delete;
 
-    sharedMemoryMap& data() {
-        return *data_;
-    }
+    sharedMemoryMap& data() { return *data_; }
 
-private:
+  private:
     void cleanup() {
         if (lockHeld_ && !name_.empty()) {
             shm_unlink(name_.c_str());
@@ -110,26 +96,24 @@ private:
     }
 
     std::string name_;
-    int descriptor_ = -1;
+    int descriptor_        = -1;
     sharedMemoryMap* data_ = nullptr;
-    bool lockHeld_ = false;
+    bool lockHeld_         = false;
 };
 
 class GncTransport {
-public:
-    virtual ~GncTransport() = default;
+  public:
+    virtual ~GncTransport()                          = default;
     virtual int exchange(const sensorMessage& input) = 0;
 };
 
 class SharedMemoryGncTransport final : public GncTransport {
-public:
+  public:
     using GncEntryPoint = std::function<int(sharedMemoryMap&)>;
 
     SharedMemoryGncTransport(sharedMemoryMap& memory, GncEntryPoint gncEntryPoint)
         : memory_(memory), gncEntryPoint_(std::move(gncEntryPoint)) {
-        if (!gncEntryPoint_) {
-            throw std::invalid_argument("GNC entry point must not be null");
-        }
+        if (!gncEntryPoint_) { throw std::invalid_argument("GNC entry point must not be null"); }
     }
 
     int exchange(const sensorMessage& input) override {
@@ -137,7 +121,7 @@ public:
         return gncEntryPoint_(memory_);
     }
 
-private:
+  private:
     sharedMemoryMap& memory_;
     GncEntryPoint gncEntryPoint_;
 };

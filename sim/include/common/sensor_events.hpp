@@ -2,20 +2,11 @@
 
 #include <cstdint>
 
-enum class SensorEventSensor {
-    GPS,
-    IMU,
-    Camera
-};
+enum class SensorEventSensor { GPS, IMU, Camera };
 
-enum class SensorEventValid {
-    Valid,
-    Invalid
-};
+enum class SensorEventValid { Valid, Invalid };
 
-enum class SensorEventType {
-    fault
-};
+enum class SensorEventType { fault };
 
 struct SensorEvent {
     SensorEventSensor sensor;

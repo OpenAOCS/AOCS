@@ -9,6 +9,7 @@ add_executable(sim
     src/telemetry/file_writer.cpp
     src/telemetry/telemetry_writer.cpp
 )
+aocs_enable_clang_tidy(sim "${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy")
 set_property(TARGET sim PROPERTY CXX_STANDARD 17)
 
 include(FetchContent)
@@ -84,6 +85,7 @@ find_package(pybind11 CONFIG REQUIRED)
 pybind11_add_module(aocs_orbit MODULE
     ${PROJECT_SOURCE_DIR}/shared/bindings/astro_bindings.cpp
 )
+aocs_enable_clang_tidy(aocs_orbit "${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy")
 target_include_directories(aocs_orbit PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${PROJECT_SOURCE_DIR}/shared
@@ -100,6 +102,7 @@ if(BUILD_TESTING)
         src/sensors/sensor.cpp
         src/sensors/gps.cpp
     )
+    aocs_enable_clang_tidy(sim_math_tests "${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy")
     target_include_directories(sim_math_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${PROJECT_SOURCE_DIR}/shared
