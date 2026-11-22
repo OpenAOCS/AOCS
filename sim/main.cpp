@@ -52,7 +52,8 @@ int main() {
                     latestGpsMeasurement = simulation->sensors.gps.measure(
                         simulation->state,
                         simulation->epoch_J2000_s +
-                            simulation->elapsedTime_s);
+                            simulation->elapsedTime_s,
+                        simulation->elapsedTime_s);
                 } else {
                     latestGpsMeasurement.has_new_GPS_measurement = 0;
                     latestGpsMeasurement.aocs_time_J2000_s =

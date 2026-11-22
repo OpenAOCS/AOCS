@@ -1,56 +1,45 @@
 #pragma once
 
-#include <cstdint>
-#include <Eigen/Dense>
 #include "common/randomMatrix.hpp"
+#include "sensors/sensor.hpp"
+
+#include <Eigen/Dense>
+
+#include <cstdint>
+#include <vector>
 
 struct GPS_SensorMsg {
-    Eigen::Vector3d r_sc_ecef;
-    Eigen::Vector3d v_sc_ecef;
-    Eigen::Matrix<double, 6, 1> measurementCovarianceDiag_ric;
+    Eigen::Vector3d r_sc_ecef_m = Eigen::Vector3d::Zero();
+    Eigen::Vector3d v_sc_ecef_m_s = Eigen::Vector3d::Zero();
+    Eigen::Matrix<double, 6, 6, Eigen::RowMajor> covariance_ecef =
+        Eigen::Matrix<double, 6, 6, Eigen::RowMajor>::Zero();
+    bool isValid = false;
 };
 
-class GPS_Sensor {
+class GPS_Sensor : public Sensor {
 public:
-    GPS_Sensor(const Eigen::Array<double, 6, 1>& measurementCovarianceDiag_lvlh,
-               bool isOmnidirectional,
-               double GPS_antenna_half_angle,
-               std::uint64_t rng_seed);
-    ~GPS_Sensor() = default;
+    struct Config {
+        double rate_Hz = 0.0;
+        double radialAccuracy_m = 0.0;
+        double inTrackAccuracy_m = 0.0;
+        double crossTrackAccuracy_m = 0.0;
+        std::uint64_t randomSeed = 1;
+    };
 
-    GPS_SensorMsg& GetGPS_SensorMsg(double r_sc_ecef, double v_sc_ecef);
+    GPS_Sensor(
+        const Config& config,
+        const std::vector<SensorEvent>& events);
+
+    double rate_Hz() const { return config_.rate_Hz; }
+
+    GPS_SensorMsg measure(
+        const Eigen::Vector3d& position_eci_m,
+        const Eigen::Vector3d& velocity_eci_m_s,
+        double t_J2000_s,
+        double simulationTime_s);
 
 private:
-    Eigen::Array<double, 6, 1> measurementCovarianceDiag_lvlh_;
-    bool isOmnidirectional_;
-    double GPS_antenna_half_angle_;
+    Config config_;
     Eigen::Matrix<double, 6, 1> noise_{};
-    GPS_SensorMsg message_{};
     RandomMatrix<double, 6, 1> noise_matrix_;
 };
-
-inline GPS_Sensor::GPS_Sensor(const Eigen::Array<double, 6, 1>& measurementCovarianceDiag_lvlh,
-                              bool isOmnidirectional,
-                              double GPS_antenna_half_angle,
-                              std::uint64_t rng_seed)
-    : measurementCovarianceDiag_lvlh_(measurementCovarianceDiag_lvlh),
-      isOmnidirectional_(isOmnidirectional),
-      GPS_antenna_half_angle_(GPS_antenna_half_angle),
-      noise_matrix_(noise_, rng_seed) {}
-
-inline GPS_SensorMsg& GPS_Sensor::GetGPS_SensorMsg(double r_sc_ecef, double v_sc_ecef) {
-    noise_matrix_.update();
-
-    Eigen::Matrix<double, 6, 1> state;
-    state << r_sc_ecef, r_sc_ecef, r_sc_ecef,
-             v_sc_ecef, v_sc_ecef, v_sc_ecef;
-
-    // Scale unit Gaussian noise by standard deviation along each RIC axis
-    state.array() += measurementCovarianceDiag_lvlh_ * noise_.array();
-
-    message_.r_sc_ecef = state.head<3>();
-    message_.v_sc_ecef = state.tail<3>();
-    message_.measurementCovarianceDiag_ric = measurementCovarianceDiag_lvlh_.matrix();
-
-    return message_;
-}

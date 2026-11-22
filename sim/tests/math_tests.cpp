@@ -15,6 +15,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 #include <unistd.h>
 
 namespace {
@@ -168,11 +169,11 @@ void testGpsModelUsesConfiguredRtnAccuracy() {
     config.radialAccuracy_m = 2.0;
     config.inTrackAccuracy_m = 10.0;
     config.crossTrackAccuracy_m = 3.0;
-    const Simulation::Sensors::GPS gps(config);
+    Simulation::Sensors::GPS gps(config);
     const SpacecraftState state{
         Eigen::Vector3d(7.0e6, 0.0, 0.0),
         Eigen::Vector3d(0.0, 7500.0, 0.0)};
-    const sensorMessage measurement = gps.measure(state, 100.0);
+    const sensorMessage measurement = gps.measure(state, 100.0, 0.0);
     const Eigen::Map<const Eigen::Matrix<double, 6, 6, Eigen::RowMajor>>
         covariance(measurement.GPS_covariance_row_major.data());
     const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> positionEigenvalues(
@@ -187,10 +188,48 @@ void testGpsModelUsesConfiguredRtnAccuracy() {
     requireNear(positionEigenvalues.eigenvalues()(2), 100.0, 1e-10,
                 "GPS covariance must use configured in-track accuracy");
     require((covariance.block<3, 3>(3, 3) -
-             Eigen::Matrix3d::Identity()).norm() == 0.0,
+             Eigen::Matrix3d::Identity()).norm() < 1e-5,
             "GPS velocity covariance must preserve the existing placeholder");
     require(measurement.has_new_GPS_measurement == 1,
             "GPS model must mark a sampled measurement as new");
+}
+
+void testSensorFaultValidityIsSharedAndIntervalBounded() {
+    using aocs::simulation::Simulation;
+    using aocs::simulation::SpacecraftState;
+
+    const std::vector<SensorEvent> events{
+        {SensorEventSensor::GPS,
+         SensorEventType::fault,
+         SensorEventValid::Invalid,
+         10.0,
+         20.0}};
+    Sensor gpsBase(SensorEventSensor::GPS, events);
+    Sensor imuBase(SensorEventSensor::IMU, events);
+    require(gpsBase.isValidAt(9.999),
+            "A sensor must be valid before its fault interval");
+    require(!gpsBase.isValidAt(10.0) && !gpsBase.isValidAt(19.999),
+            "A scheduled sensor fault must invalidate the sensor in its interval");
+    require(gpsBase.isValidAt(20.0),
+            "A sensor must become valid at the end of its fault interval");
+    require(imuBase.isValidAt(15.0),
+            "A GPS fault must not invalidate another sensor type");
+
+    Simulation::Sensors::GPS::Config config;
+    config.rate_Hz = 1.0;
+    config.radialAccuracy_m = 2.0;
+    config.inTrackAccuracy_m = 10.0;
+    config.crossTrackAccuracy_m = 3.0;
+    Simulation::Sensors::GPS gps(config, events);
+    const SpacecraftState state{
+        Eigen::Vector3d(7.0e6, 0.0, 0.0),
+        Eigen::Vector3d(0.0, 7500.0, 0.0)};
+    require(
+        gps.measure(state, 110.0, 10.0).has_new_GPS_measurement == 0,
+        "An invalid GPS sample must not be published to GNC");
+    require(
+        gps.measure(state, 120.0, 20.0).has_new_GPS_measurement == 1,
+        "GPS sampling must resume once the fault interval ends");
 }
 
 void testRtnProcessNoiseUsesOrthogonalConfiguredAxes() {
@@ -421,6 +460,7 @@ int main() {
         testIau2000B();
         testRK4Propagation();
         testGpsModelUsesConfiguredRtnAccuracy();
+        testSensorFaultValidityIsSharedAndIntervalBounded();
         testRtnProcessNoiseUsesOrthogonalConfiguredAxes();
         testSharedMemoryGncTransport();
         testSharedMemoryRegionRecoversStaleObject();

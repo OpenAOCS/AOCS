@@ -2,6 +2,8 @@ add_executable(sim
     main.cpp
     environment.cpp
     sensors.cpp
+    src/sensors/sensor.cpp
+    src/sensors/gps.cpp
     simulation.cpp
     initialization.cpp
     data/file_writer.cpp
@@ -95,6 +97,8 @@ if(BUILD_TESTING)
     add_executable(sim_math_tests
         tests/math_tests.cpp
         sensors.cpp
+        src/sensors/sensor.cpp
+        src/sensors/gps.cpp
     )
     target_include_directories(sim_math_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include

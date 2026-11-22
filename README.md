@@ -59,7 +59,9 @@ structures before constructing those components. Actuators retain body-frame
 force and torque sums; rotational dynamics are not modeled yet. Message layouts
 are split by flow: `sim_to_aocs.hpp` defines simulation inputs,
 `aocs_to_sim.hpp` defines GNC outputs, and `ipc.hpp` provides shared-memory
-transport.
+transport. `Simulation::Sensors::GPS` composes the GPS-specific `GPS_Sensor`,
+which derives from the shared `Sensor` validity base. Scenario fault intervals
+apply by sensor type; invalid GPS samples are sent as no-new-measurement input.
 `sim/main.cpp` owns simulation orchestration, while `sim/environment.cpp`
 computes environmental forces for propagation.
 The GNC acceleration process-noise spectral density is configured internally
@@ -96,9 +98,11 @@ nanoseconds; the `t_sec` field remains elapsed simulation seconds. CMake
 fetches Apache TsFile v2.5.0 for the native writer, and the Python `tsfile`
 package reads it into a pandas DataFrame for plotting. Configure
 `true_state_rate_hz`, `aocs_rate_hz`, and `log_rate_hz` under `simulation`,
-and GPS rate and position accuracies under `spacecraft.sensors.gps` in
-`config.json`. The true-state rate must be an integer multiple of the AOCS and
-log rates, and the AOCS rate must be an integer multiple of the GPS rate.
+GPS rate and position accuracies under `spacecraft.sensors.gps`, and an optional
+scenario name under `simulation.scenario_config` in `config.json`. Scenario
+fault intervals are defined in `sim/scenarios/<name>.yaml`. The true-state
+rate must be an integer multiple of the AOCS and log rates, and the AOCS rate
+must be an integer multiple of the GPS rate.
 
 After running the simulation, generate the interactive report from the
 repository root:
@@ -117,13 +121,13 @@ Angular elements are converted from radians to degrees.
 
 
 ## Roadmap
-```text
+<pre>
 Week 1: Inertial Nav & EKF MVP
 ├── High-Fidelity GPS
-│   ├── GPS Sensor Model
+│   ├── <del>GPS Sensor Model</del>
 │   └── Sensor Invalid Feature (General)
 └── EKF MVP Architecture
-    ├── Process Noise
+    ├── <del>Process Noise</del>
     └── Increased STM fidelity - exponential drag, J2, Vallado Sun/Moon Ephem
 
 Week 2: Hi-Fi Inertial Physics
@@ -177,4 +181,4 @@ Week 8: Station Keeping Guidance
 Week 9: Hi-Fi Orbital Maneuvering
 ├── Thruster Allocation - Facet Method (?)
 └── Mass Flow Dynamics      
-```
+</pre>

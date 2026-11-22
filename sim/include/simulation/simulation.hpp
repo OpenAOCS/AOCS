@@ -1,6 +1,7 @@
 #pragma once
 
 #include "environment/earth_gravity/gravity.hpp"
+#include "sensors/gps.hpp"
 #include "sim_to_aocs.hpp"
 
 #include <Eigen/Dense>
@@ -11,6 +12,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace aocs::simulation {
 
@@ -137,30 +139,30 @@ public:
     public:
         class GPS {
         public:
-            struct Config {
-                double rate_Hz = 0.0;
-                double radialAccuracy_m = 0.0;
-                double inTrackAccuracy_m = 0.0;
-                double crossTrackAccuracy_m = 0.0;
-            };
+            using Config = GPS_Sensor::Config;
 
-            explicit GPS(const Config& config);
+            GPS(
+                const Config& config,
+                const std::vector<SensorEvent>& events = {});
 
             sensorMessage measure(
                 const SpacecraftState& state,
-                double epoch_J2000_s) const;
+                double epoch_J2000_s,
+                double simulationTime_s);
 
-            double rate_Hz() const { return config_.rate_Hz; }
+            double rate_Hz() const { return model_.rate_Hz(); }
 
         private:
-            Config config_;
+            GPS_Sensor model_;
         };
 
         struct Config {
             GPS::Config gps;
+            std::vector<SensorEvent> events;
         };
 
-        explicit Sensors(const Config& config) : gps(config.gps) {}
+        explicit Sensors(const Config& config)
+            : gps(config.gps, config.events) {}
 
         GPS gps;
     };
