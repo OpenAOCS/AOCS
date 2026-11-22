@@ -17,21 +17,29 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes \
+            clang-format \
+            clang-tools \
             clang-tidy \
             libjsoncpp-dev \
             ninja-build \
             pybind11-dev \
             python3-dev
 
-      - name: Configure with clang-tidy
+      - name: Check clang-format
+        run: python3 scripts/check_clang_format.py
+
+      - name: Configure
         run: >
           cmake -S . -B build -G Ninja
-          -DAOCS_ENABLE_CLANG_TIDY=ON
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
-      - name: Build and analyze
+      - name: Build
         run: >
           cmake --build build --parallel 4
           --target gnc_lib sim sim_math_tests aocs_orbit
+
+      - name: Run clang-tidy across the repository
+        run: python3 scripts/check_clang_tidy.py --build-dir build --jobs 4
 
       - name: Run tests
         run: ctest --test-dir build --output-on-failure

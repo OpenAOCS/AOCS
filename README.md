@@ -32,20 +32,39 @@ cmake -S . -B build -G Ninja
 cmake --build build
 ```
 
-For optional static analysis, install `clang-tidy` and enable it when
-configuring:
+## Before committing
+
+The checked-in [`.clang-format`](./.clang-format) is the style policy. Install
+`clang-format`, `clang-tidy`, and `clang-tools`, then configure a compile
+database and build the project targets:
 
 ```sh
-cmake -S . -B build -DAOCS_ENABLE_CLANG_TIDY=ON
-cmake --build build --target gnc_lib sim sim_math_tests aocs_orbit
+sudo apt-get install clang-format clang-tidy clang-tools
+cmake -S . -B build -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+cmake --build build --parallel 4 --target gnc_lib sim sim_math_tests aocs_orbit
 ```
 
-The GNC library uses the more portability-focused
-[`gnc_lib/.clang-tidy`](./gnc_lib/.clang-tidy) profile; the desktop simulation
-and its tools use [`sim/.clang-tidy`](./sim/.clang-tidy). Findings are warnings,
-not build failures. The same profiles run in the GitHub Actions workflow on
-pushes and pull requests; the separately configured Apache TsFile dependency is
-not included.
+For each change, format edited files, then run the repository checks and tests:
+
+```sh
+clang-format -i path/to/changed.cpp path/to/changed.hpp
+python3 scripts/check_clang_format.py
+python3 scripts/check_clang_tidy.py --build-dir build --jobs 4
+ctest --test-dir build --output-on-failure
+```
+
+The clang-format script checks first-party C++ files, including non-ignored
+untracked files, and skips vendored Eigen under `shared/external/`. The
+clang-tidy script runs each profile across its matching translation units in
+the compile database: [`gnc_lib/.clang-tidy`](./gnc_lib/.clang-tidy) for GNC and
+[`sim/.clang-tidy`](./sim/.clang-tidy) for the simulation and its tools. It
+does not analyze the separately configured Apache TsFile dependency. Findings
+are warnings, not build failures; GitHub Actions runs the same checks on pushes
+and pull requests. Use the same clang-format version locally and in CI.
+
+The optional CMake setting `-DAOCS_ENABLE_CLANG_TIDY=ON` also runs clang-tidy
+during compilation; the script above checks all translation units without
+requiring a clean rebuild.
 
 Run the simulation from the repository root:
 
