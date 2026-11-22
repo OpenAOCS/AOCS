@@ -14,68 +14,13 @@
 namespace aocs::simulation {
 namespace {
 
-Json::Value requireMember(
-    const Json::Value& object,
-    const char* name,
-    const std::string& context) {
-    if (!object.isObject() || !object.isMember(name)) {
-        throw std::invalid_argument(context + "." + name + " is required");
-    }
-    return object[name];
-}
-
-double readFiniteNumber(
-    const Json::Value& object,
-    const char* name,
-    const std::string& context) {
-    const Json::Value value = requireMember(object, name, context);
-    if (!value.isNumeric() || !std::isfinite(value.asDouble())) {
-        throw std::invalid_argument(
-            context + "." + name + " must be a finite number");
-    }
-    return value.asDouble();
-}
-
-std::uint32_t readUnsigned(
-    const Json::Value& object,
-    const char* name,
-    const std::string& context) {
-    const Json::Value value = requireMember(object, name, context);
-    if (!value.isUInt()) {
-        throw std::invalid_argument(
-            context + "." + name + " must be a non-negative integer");
-    }
-    return value.asUInt();
-}
-
-Eigen::Vector3d readVector3(
-    const Json::Value& object,
-    const char* name,
-    const std::string& context) {
-    const Json::Value value = requireMember(object, name, context);
-    if (!value.isArray() || value.size() != 3 ||
-        !value[0].isNumeric() || !value[1].isNumeric() ||
-        !value[2].isNumeric()) {
-        throw std::invalid_argument(
-            context + "." + name + " must be an array of three numbers");
-    }
-
-    const Eigen::Vector3d result(
-        value[0].asDouble(), value[1].asDouble(), value[2].asDouble());
-    if (!result.allFinite()) {
-        throw std::invalid_argument(
-            context + "." + name + " must contain finite values");
-    }
-    return result;
-}
-
 Simulation::Config readConfiguration(const Json::Value& document) {
     Simulation::Config config;
 
-    const Json::Value simulation = requireMember(
-        document, "simulation", "config");
-    const Json::Value initialConditions = requireMember(
-        simulation, "initial_conditions", "simulation");
+    const Json::Value simulation =
+        requireMember(document, "simulation", "config");
+    const Json::Value initialConditions =
+        requireMember(simulation, "initial_conditions", "simulation");
     config.initialConditions.position_eci_m = readVector3(
         initialConditions, "r0_sc_eci_m", "simulation.initial_conditions");
     config.initialConditions.velocity_eci_m_s = readVector3(
@@ -92,12 +37,12 @@ Simulation::Config readConfiguration(const Json::Value& document) {
     config.timing.logRate_Hz =
         readFiniteNumber(simulation, "log_rate_hz", "simulation");
 
-    const Json::Value spacecraft = requireMember(
-        document, "spacecraft", "config");
+    const Json::Value spacecraft =
+        requireMember(document, "spacecraft", "config");
     config.spacecraft.mass_kg =
         readFiniteNumber(spacecraft, "mass_kg", "spacecraft");
-    const Json::Value sensors = requireMember(
-        spacecraft, "sensors", "spacecraft");
+    const Json::Value sensors =
+        requireMember(spacecraft, "sensors", "spacecraft");
     const Json::Value gps =
         requireMember(sensors, "gps", "spacecraft.sensors");
     config.sensors.gps.rate_Hz =
