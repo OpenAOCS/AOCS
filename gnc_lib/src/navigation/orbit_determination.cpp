@@ -16,11 +16,6 @@ OrbitDetermination::OrbitDetermination(OrbitDeterminationMethod method,
         accelerationProcessNoiseSpectralDensityRTN_m2_s3.minCoeff() < 0.0) {
         throw std::invalid_argument("Acceleration process-noise spectral density must be finite and non-negative");
     }
-    if (method == OrbitDeterminationMethod::ExtendedKalmanFilter) {
-        // Initialize EKF specific variables, if any
-    } else if (method == OrbitDeterminationMethod::UnscentedKalmanFilter) {
-        // Initialize UKF specific variables, if any
-    }
 }
 
 void OrbitDetermination::InitializeInertialState(const InertialStateEstimate& initialEstimate) {

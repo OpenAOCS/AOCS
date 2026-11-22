@@ -9,6 +9,5 @@ Checks: >
   modernize-use-nullptr,
   modernize-use-override
 WarningsAsErrors: ''
-HeaderFilterRegex: '.*'
-ExcludeHeaderFilterRegex: '.*/(external|_deps|build)/.*'
+HeaderFilterRegex: '.*(/sim/|/shared/(astro|bindings|math)/|/shared/(ipc|aocs_to_sim|sim_to_aocs)\.hpp).*'
 FormatStyle: file

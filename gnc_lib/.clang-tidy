@@ -7,6 +7,5 @@ Checks: >
   portability-*,
   -portability-avoid-pragma-once
 WarningsAsErrors: ''
-HeaderFilterRegex: '.*'
-ExcludeHeaderFilterRegex: '.*/(external|_deps|build)/.*'
+HeaderFilterRegex: '.*(/gnc_lib/|/sim/|/shared/(astro|bindings|math)/|/shared/(ipc|aocs_to_sim|sim_to_aocs)\.hpp).*'
 FormatStyle: file

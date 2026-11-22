@@ -1,12 +1,14 @@
 #pragma once
 
+#include <cstdint>
+
 #include <Eigen/Dense>
 
 namespace aocs::navigation {
 
 using StateCovariance = Eigen::Matrix<double, 6, 6, Eigen::RowMajor>;
 
-enum class OrbitDeterminationMethod { ExtendedKalmanFilter, UnscentedKalmanFilter };
+enum class OrbitDeterminationMethod : std::uint8_t { ExtendedKalmanFilter, UnscentedKalmanFilter };
 
 struct InertialStateEstimate {
     double t_estimate_J2000_s                 = 0.0;
