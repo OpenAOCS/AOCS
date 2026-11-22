@@ -113,7 +113,7 @@ Angular elements are converted from radians to degrees.
 Week 1: Inertial Nav & EKF MVP
 ├── High-Fidelity GPS
 │   ├── <del>GPS Sensor Model</del>
-│   └── <del>Sensor Invalid Feature (General)<del>
+│   └── <del>Sensor Invalid Feature (General)</del>
 └── EKF MVP Architecture
     ├── <del>Process Noise</del>
     └── Increased STM fidelity - exponential drag, J2, Vallado Sun/Moon Ephem
