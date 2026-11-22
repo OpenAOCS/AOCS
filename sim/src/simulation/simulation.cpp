@@ -1,6 +1,6 @@
 #include "simulation/simulation.hpp"
 
-#include "data/file_writer.hpp"
+#include "telemetry/file_writer.hpp"
 #include "environment/earth_rotation/iau2000b.hpp"
 #include "sim_constants.hpp"
 

@@ -1,4 +1,4 @@
-#include "data/telemetry_writer.hpp"
+#include "telemetry/telemetry_writer.hpp"
 
 #include "astro/ijk_keplerian.hpp"
 #include "sim_constants.hpp"

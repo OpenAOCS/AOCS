@@ -1,13 +1,13 @@
 add_executable(sim
     main.cpp
-    environment.cpp
+    src/environment/environment.cpp
     sensors.cpp
     src/sensors/sensor.cpp
     src/sensors/gps.cpp
-    simulation.cpp
-    initialization.cpp
-    data/file_writer.cpp
-    data/telemetry_writer.cpp
+    src/simulation/simulation.cpp
+    src/simulation/initialization.cpp
+    src/telemetry/file_writer.cpp
+    src/telemetry/telemetry_writer.cpp
 )
 set_property(TARGET sim PROPERTY CXX_STANDARD 17)
 
@@ -82,7 +82,7 @@ find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
 
 pybind11_add_module(aocs_orbit MODULE
-    bindings/astro_bindings.cpp
+    ${PROJECT_SOURCE_DIR}/shared/bindings/astro_bindings.cpp
 )
 target_include_directories(aocs_orbit PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include

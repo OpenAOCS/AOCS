@@ -1,5 +1,5 @@
-#include "data/file_writer.hpp"
-#include "data/telemetry_writer.hpp"
+#include "telemetry/file_writer.hpp"
+#include "telemetry/telemetry_writer.hpp"
 #include "gnc_lib.hpp"
 #include "ipc.hpp"
 #include "simulation/initialization.hpp"
