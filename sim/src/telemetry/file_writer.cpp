@@ -1,5 +1,6 @@
 #include "telemetry/file_writer.hpp"
 
+#include "conversions/frames/FK5.hpp"
 #include "file/write_file.h"
 #include "sim_constants.hpp"
 #include "utils/db_utils.h"
@@ -33,8 +34,14 @@ const std::vector<common::ColumnSchema>& columns() {
         addDoubleField("v_y_m_s");
         addDoubleField("v_z_m_s");
         addDoubleField("gps_time_s");
+        result.emplace_back("gps_measurement_sampled", common::INT32, common::UNCOMPRESSED, common::PLAIN,
+                            common::ColumnCategory::FIELD);
         result.emplace_back("gps_measurement_updated", common::INT32, common::UNCOMPRESSED, common::PLAIN,
                             common::ColumnCategory::FIELD);
+        for (const char* axis : {"x", "y", "z"}) {
+            addDoubleField("gps_r_" + std::string(axis) + "_ecef_m");
+            addDoubleField("gps_v_" + std::string(axis) + "_ecef_m_s");
+        }
         addDoubleField("estimate_time_s");
         addDoubleField("estimate_r_x_m");
         addDoubleField("estimate_r_y_m");
@@ -42,6 +49,10 @@ const std::vector<common::ColumnSchema>& columns() {
         addDoubleField("estimate_v_x_m_s");
         addDoubleField("estimate_v_y_m_s");
         addDoubleField("estimate_v_z_m_s");
+        for (const char* axis : {"x", "y", "z"}) {
+            addDoubleField("estimate_r_" + std::string(axis) + "_ecef_m");
+            addDoubleField("estimate_v_" + std::string(axis) + "_ecef_m_s");
+        }
         for (std::size_t row = 0; row < 6; ++row) {
             for (std::size_t col = 0; col < 6; ++col) {
                 addDoubleField("cov_" + std::to_string(row) + "_" + std::to_string(col));
@@ -124,15 +135,38 @@ struct FileWriter::Impl {
         addValue("v_x_m_s", velocity_eci_m_s.x());
         addValue("v_y_m_s", velocity_eci_m_s.y());
         addValue("v_z_m_s", velocity_eci_m_s.z());
-        addValue("gps_time_s", sensors.GPS_time_s - SimConstants::kGpsSecondsAtJ2000 - epoch_J2000_s);
+        addValue("gps_time_s", sensors.GPS_time_J2000_s - epoch_J2000_s);
+        const bool gpsMeasurementSampled = sensors.GPS_time_J2000_s != lastGpsTimeJ2000Seconds;
+        lastGpsTimeJ2000Seconds          = sensors.GPS_time_J2000_s;
+        addValue("gps_measurement_sampled", static_cast<std::int32_t>(gpsMeasurementSampled));
         addValue("gps_measurement_updated", static_cast<std::int32_t>(sensors.has_new_GPS_measurement));
+        const char* const gpsPositionColumns[] = {"gps_r_x_ecef_m", "gps_r_y_ecef_m", "gps_r_z_ecef_m"};
+        const char* const gpsVelocityColumns[] = {"gps_v_x_ecef_m_s", "gps_v_y_ecef_m_s", "gps_v_z_ecef_m_s"};
+        for (std::size_t axis = 0; axis < 3; ++axis) {
+            addValue(gpsPositionColumns[axis], sensors.GPS_position_ECEF_m[axis]);
+            addValue(gpsVelocityColumns[axis], sensors.GPS_velocity_ECEF_m_s[axis]);
+        }
         addValue("estimate_time_s", estimate.time_J2000_s - epoch_J2000_s);
 
         const char* const estimatePositionColumns[] = {"estimate_r_x_m", "estimate_r_y_m", "estimate_r_z_m"};
         const char* const estimateVelocityColumns[] = {"estimate_v_x_m_s", "estimate_v_y_m_s", "estimate_v_z_m_s"};
+        const Eigen::Vector3d estimatePositionEci(estimate.position_ECI_m[0], estimate.position_ECI_m[1],
+                                                  estimate.position_ECI_m[2]);
+        const Eigen::Vector3d estimateVelocityEci(estimate.velocity_ECI_m_s[0], estimate.velocity_ECI_m_s[1],
+                                                  estimate.velocity_ECI_m_s[2]);
+        const Eigen::Matrix3d eciToEcef            = getQuaternionECItoECEF(estimate.time_J2000_s).toRotationMatrix();
+        const Eigen::Vector3d estimatePositionEcef = eciToEcef * estimatePositionEci;
+        const Eigen::Vector3d earthAngularVelocityEcef(0.0, 0.0, SimConstants::kEarthAngularRate);
+        const Eigen::Vector3d estimateVelocityEcef =
+            eciToEcef * estimateVelocityEci - earthAngularVelocityEcef.cross(estimatePositionEcef);
+        const char* const estimatePositionEcefColumns[] = {"estimate_r_x_ecef_m", "estimate_r_y_ecef_m", "estimate_r_z_ecef_m"};
+        const char* const estimateVelocityEcefColumns[] = {"estimate_v_x_ecef_m_s", "estimate_v_y_ecef_m_s",
+                                                           "estimate_v_z_ecef_m_s"};
         for (std::size_t axis = 0; axis < 3; ++axis) {
             addValue(estimatePositionColumns[axis], estimate.position_ECI_m[axis]);
             addValue(estimateVelocityColumns[axis], estimate.velocity_ECI_m_s[axis]);
+            addValue(estimatePositionEcefColumns[axis], estimatePositionEcef[static_cast<Eigen::Index>(axis)]);
+            addValue(estimateVelocityEcefColumns[axis], estimateVelocityEcef[static_cast<Eigen::Index>(axis)]);
         }
         for (std::size_t index = 0; index < estimate.covariance_row_major.size(); ++index) {
             addValue("cov_" + std::to_string(index / 6) + "_" + std::to_string(index % 6),
@@ -168,8 +202,9 @@ struct FileWriter::Impl {
     storage::TableSchema tableSchema;
     storage::Tablet tablet;
     std::unique_ptr<storage::TsFileTableWriter> writer;
-    std::uint32_t rowCount = 0;
-    bool closed            = false;
+    std::uint32_t rowCount         = 0;
+    double lastGpsTimeJ2000Seconds = 0.0;
+    bool closed                    = false;
 };
 
 FileWriter::FileWriter(const std::string& path) {

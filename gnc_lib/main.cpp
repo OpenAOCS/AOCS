@@ -6,7 +6,6 @@
 #include <Eigen/Dense>
 #include <algorithm>
 #include <cmath>
-#include <limits>
 #include <optional>
 #include <utility>
 
@@ -18,10 +17,7 @@ navigation::NavigationInput mapNavigationInput(const sensorMessage& sensors) {
     input.time_J2000_s = sensors.aocs_time_J2000_s;
     if (sensors.has_new_GPS_measurement == 0) { return input; }
 
-    double gpsTime_J2000_s           = sensors.GPS_time_s - flight_constants::kGPSSecondsAtJ2000;
-    const double gpsTimeResolution_s = 4.0 * std::numeric_limits<double>::epsilon() *
-                                       std::max(std::abs(sensors.GPS_time_s), flight_constants::kGPSSecondsAtJ2000);
-    if (std::abs(gpsTime_J2000_s - input.time_J2000_s) <= gpsTimeResolution_s) { gpsTime_J2000_s = input.time_J2000_s; }
+    const double gpsTime_J2000_s            = sensors.GPS_time_J2000_s;
 
     const Eigen::Quaterniond earthRotation  = getQuaternionECEFtoECI(gpsTime_J2000_s);
     const Eigen::Matrix3d ecefToEci         = earthRotation.toRotationMatrix();

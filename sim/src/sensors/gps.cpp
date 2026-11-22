@@ -29,8 +29,10 @@ GPS_SensorMsg GPS_Sensor::measure(const Eigen::Vector3d& position_eci_m, const E
     message.isValid = isValidAt(simulationTime_s);
     if (!message.isValid) { return message; }
 
-    const aocs::environment::JulianDate date = aocs::environment::JulianDate::fromJ2000Seconds(t_J2000_s);
-    const Eigen::Matrix3d eciToEcef          = aocs::environment::EarthRotation(date, date).reduce().gcrsToItrs;
+    const aocs::environment::JulianDate tt = aocs::environment::JulianDate::fromJ2000Seconds(t_J2000_s);
+    const aocs::environment::JulianDate ut1 =
+        aocs::environment::JulianDate::fromJ2000Seconds(t_J2000_s + SimConstants::kTTtoUT1Offset_s);
+    const Eigen::Matrix3d eciToEcef = aocs::environment::EarthRotation(tt, ut1).reduce().gcrsToItrs;
     const Eigen::Vector3d earthAngularVelocity_ecef_rad_s(0.0, 0.0, SimConstants::kEarthAngularRate);
     const Eigen::Vector3d radialDirection_eci  = position_eci_m.normalized();
     const Eigen::Vector3d orbitNormal_eci      = angularMomentum.normalized();
@@ -62,6 +64,7 @@ GPS_SensorMsg GPS_Sensor::measure(const Eigen::Vector3d& position_eci_m, const E
     const Eigen::Vector3d position_ecef_m      = eciToEcef * (position_eci_m + rtnToEci * noisePositionRtn_m);
     const Eigen::Vector3d velocity_ecef_m_s    = eciToEcef * (velocity_eci_m_s + rtnToEci * noiseVelocityRtn_m_s) -
                                               earthAngularVelocity_ecef_rad_s.cross(position_ecef_m);
+    message.t_J2000_s     = t_J2000_s;
     message.r_sc_ecef_m   = position_ecef_m;
     message.v_sc_ecef_m_s = velocity_ecef_m_s;
     return message;

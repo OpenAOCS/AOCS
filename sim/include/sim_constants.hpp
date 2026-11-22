@@ -17,6 +17,7 @@ class SimConstants {
     static constexpr double kPi                          = 3.14159265358979323846;
     static constexpr double kJulianDateJ2000toJulianDate = 2451545.0;
     static constexpr double kSecondsPerDay               = 86400.0;
+    static constexpr double kTTtoUT1Offset_s             = -69.184;
     static constexpr double kRadtoDeg                    = 180.0 / kPi;
     static constexpr double kDegtoRad                    = kPi / 180.0;
 
@@ -27,7 +28,6 @@ class SimConstants {
     static constexpr double kEarthMu                     = kGravitationalConstant * kEarthMass; // m^3 s^-2
     static constexpr double kEarthAngularRate            = 7.2921150e-5;                        // rad/s
 
-    static constexpr double kGpsSecondsAtJ2000           = 630763200.0;
     static constexpr long double kUnixSecondsAtJ2000     = 946728000.0L;
     static constexpr long double kNanosecondsPerSecond   = 1000000000.0L;
 };

@@ -22,6 +22,7 @@ AMBER = "#ffd166"
 CYAN = "#48d6d2"
 GREEN = "#9ce86b"
 BLUE = "#58a6ff"
+RED = "#e2535a"
 PLOTLY_CONFIG = {"responsive": True, "displaylogo": False}
 
 
@@ -73,6 +74,7 @@ def build_state_figure(df):
             x_domain, y_domain = subplot.domain.x, subplot.domain.y
         else:
             x_domain, y_domain = subplot.xaxis.domain, subplot.yaxis.domain
+        fig.update_annotations(font={"color": ORANGE, "size": 11, "family": "monospace"})
         fig.add_annotation(
             x=(x_domain[0] + x_domain[1]) / 2.0,
             y=y_domain[1] + 0.008,
@@ -280,14 +282,267 @@ def downsample_for_plotting(df, max_points=6000):
     return df.iloc[indices].copy()
 
 
-def ellipsoid_surface(covariance, scale, unit_x, unit_y, unit_z):
-    symmetric_covariance = 0.5 * (covariance + covariance.T)
-    eigenvalues, eigenvectors = np.linalg.eigh(symmetric_covariance)
-    radii = scale * np.sqrt(np.maximum(eigenvalues, 0.0))
-    transform = eigenvectors @ np.diag(radii)
-    unit_points = np.stack((unit_x.ravel(), unit_y.ravel(), unit_z.ravel()))
-    points = transform @ unit_points
-    return tuple(points[axis].reshape(unit_x.shape) for axis in range(3))
+def gps_invalid_intervals(df):
+    sampled = df["gps_measurement_sampled"].to_numpy(dtype=bool)
+    sample_data = df.loc[sampled, ["gps_time_s", "gps_measurement_updated"]]
+    intervals = []
+    invalid_start_s = None
+    for sample_time_s, measurement_updated in sample_data.itertuples(index=False, name=None):
+        if not measurement_updated:
+            if invalid_start_s is None:
+                invalid_start_s = sample_time_s
+        elif invalid_start_s is not None:
+            if sample_time_s > invalid_start_s:
+                intervals.append((invalid_start_s, sample_time_s))
+            invalid_start_s = None
+
+    if invalid_start_s is not None:
+        end_time_s = df["t_sec"].iloc[-1]
+        if end_time_s > invalid_start_s:
+            intervals.append((invalid_start_s, end_time_s))
+    return intervals
+
+
+def build_navigation_figure(df):
+    truth_times_s = df["t_sec"].to_numpy()
+    estimate_times_s = df["estimate_time_s"].to_numpy()
+    truth_columns = [
+        "r_x_m",
+        "r_y_m",
+        "r_z_m",
+        "v_x_m_s",
+        "v_y_m_s",
+        "v_z_m_s",
+    ]
+    estimate_columns = [
+        "estimate_r_x_m",
+        "estimate_r_y_m",
+        "estimate_r_z_m",
+        "estimate_v_x_m_s",
+        "estimate_v_y_m_s",
+        "estimate_v_z_m_s",
+    ]
+    truth_state = df[truth_columns].to_numpy()
+    estimate_state = df[estimate_columns].to_numpy()
+    truth_at_estimate_times = np.column_stack(
+        [
+            np.interp(estimate_times_s, truth_times_s, truth_state[:, component])
+            for component in range(6)
+        ]
+    )
+    state_error = estimate_state - truth_at_estimate_times
+
+    navigation_df = df.copy()
+    axis_names = ["X", "Y", "Z"]
+    for axis, axis_name in enumerate(axis_names):
+        navigation_df[f"eci_position_error_{axis_name.lower()}_m"] = state_error[:, axis]
+        navigation_df[f"eci_velocity_error_{axis_name.lower()}_m_s"] = state_error[:, axis + 3]
+    navigation_df["eci_position_error_norm_m"] = np.linalg.norm(state_error[:, :3], axis=1)
+    navigation_df["eci_velocity_error_norm_m_s"] = np.linalg.norm(state_error[:, 3:], axis=1)
+    plot_df = downsample_for_plotting(navigation_df)
+
+    valid_gps_samples = df.loc[
+        df["gps_measurement_sampled"].astype(bool) & df["gps_measurement_updated"].astype(bool)
+    ]
+    position_gps_columns = ["gps_r_x_ecef_m", "gps_r_y_ecef_m", "gps_r_z_ecef_m"]
+    position_estimate_columns = [
+        "estimate_r_x_ecef_m",
+        "estimate_r_y_ecef_m",
+        "estimate_r_z_ecef_m",
+    ]
+    velocity_gps_columns = ["gps_v_x_ecef_m_s", "gps_v_y_ecef_m_s", "gps_v_z_ecef_m_s"]
+    velocity_estimate_columns = [
+        "estimate_v_x_ecef_m_s",
+        "estimate_v_y_ecef_m_s",
+        "estimate_v_z_ecef_m_s",
+    ]
+    fig = make_subplots(
+        rows=8,
+        cols=1,
+        shared_xaxes=True,
+        row_heights=[0.105] * 6 + [0.185] * 2,
+        vertical_spacing=0.025,
+        subplot_titles=[
+            "ECEF Position X",
+            "ECEF Position Y",
+            "ECEF Position Z",
+            "ECEF Velocity X",
+            "ECEF Velocity Y",
+            "ECEF Velocity Z",
+            "ECI Position Error (Estimate − Truth)",
+            "ECI Velocity Error (Estimate − Truth)",
+        ],
+    )
+    axis_colors = [CYAN, GREEN, BLUE]
+    for axis, (axis_name, color) in enumerate(zip(axis_names, axis_colors)):
+        fig.add_trace(
+            go.Scatter(
+                x=valid_gps_samples["gps_time_s"],
+                y=valid_gps_samples[position_gps_columns[axis]],
+                mode="markers",
+                marker={"color": ORANGE, "size": 4, "opacity": 0.7},
+                name="Raw GPS",
+                legendgroup="gps",
+                showlegend=axis == 0,
+                hovertemplate="%{x:.2f} s<br>%{y:.3f} m<extra>GPS ECEF</extra>",
+            ),
+            row=axis + 1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=plot_df["estimate_time_s"],
+                y=plot_df[position_estimate_columns[axis]],
+                mode="lines",
+                line={"color": color, "width": 1.5},
+                name="Filtered estimate",
+                legendgroup="estimate",
+                showlegend=axis == 0,
+                hovertemplate="%{x:.2f} s<br>%{y:.3f} m<extra>Estimate ECEF</extra>",
+            ),
+            row=axis + 1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=valid_gps_samples["gps_time_s"],
+                y=valid_gps_samples[velocity_gps_columns[axis]],
+                mode="markers",
+                marker={"color": ORANGE, "size": 4, "opacity": 0.7},
+                name="Raw GPS velocity",
+                legendgroup="gps",
+                showlegend=False,
+                hovertemplate="%{x:.2f} s<br>%{y:.6f} m/s<extra>GPS ECEF</extra>",
+            ),
+            row=axis + 4,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=plot_df["estimate_time_s"],
+                y=plot_df[velocity_estimate_columns[axis]],
+                mode="lines",
+                line={"color": color, "width": 1.5},
+                name="Filtered estimate velocity",
+                legendgroup="estimate",
+                showlegend=False,
+                hovertemplate="%{x:.2f} s<br>%{y:.6f} m/s<extra>Estimate ECEF</extra>",
+            ),
+            row=axis + 4,
+            col=1,
+        )
+
+    for axis, (axis_name, color) in enumerate(zip(axis_names, axis_colors)):
+        fig.add_trace(
+            go.Scatter(
+                x=plot_df["estimate_time_s"],
+                y=plot_df[f"eci_position_error_{axis_name.lower()}_m"],
+                mode="lines",
+                line={"color": color, "width": 1.3},
+                name=f"Δ{axis_name}",
+                hovertemplate="%{x:.2f} s<br>%{y:.3f} m<extra>ECI position error</extra>",
+            ),
+            row=7,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=plot_df["estimate_time_s"],
+                y=plot_df[f"eci_velocity_error_{axis_name.lower()}_m_s"],
+                mode="lines",
+                line={"color": color, "width": 1.3},
+                name=f"ΔV{axis_name}",
+                hovertemplate="%{x:.2f} s<br>%{y:.6f} m/s<extra>ECI velocity error</extra>",
+            ),
+            row=8,
+            col=1,
+        )
+    fig.add_trace(
+        go.Scatter(
+            x=plot_df["estimate_time_s"],
+            y=plot_df["eci_position_error_norm_m"],
+            mode="lines",
+            line={"color": AMBER, "width": 2},
+            name="Position error norm",
+            hovertemplate="%{x:.2f} s<br>%{y:.3f} m<extra>ECI position error norm</extra>",
+        ),
+        row=7,
+        col=1,
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=plot_df["estimate_time_s"],
+            y=plot_df["eci_velocity_error_norm_m_s"],
+            mode="lines",
+            line={"color": AMBER, "width": 2},
+            name="Velocity error norm",
+            hovertemplate="%{x:.2f} s<br>%{y:.6f} m/s<extra>ECI velocity error norm</extra>",
+        ),
+        row=8,
+        col=1,
+    )
+
+    for row in range(1, 9):
+        fig.update_xaxes(
+            title_text="Time (s)" if row == 8 else None,
+            gridcolor=GRID,
+            zerolinecolor=GRID,
+            linecolor=GRID,
+            tickfont={"color": TEXT},
+            title_font={"color": TEXT},
+            row=row,
+            col=1,
+        )
+        unit = "m" if row <= 3 or row == 7 else "m/s"
+        fig.update_yaxes(
+            title_text=unit,
+            gridcolor=GRID,
+            zerolinecolor=GRID,
+            linecolor=GRID,
+            tickfont={"color": TEXT},
+            title_font={"color": TEXT},
+            row=row,
+            col=1,
+        )
+    for start_time_s, end_time_s in gps_invalid_intervals(df):
+        for row in range(1, 7):
+            fig.add_vrect(
+                x0=start_time_s,
+                x1=end_time_s,
+                fillcolor=RED,
+                opacity=0.18,
+                line_width=0,
+                layer="below",
+                row=row,
+                col=1,
+            )
+
+    fig.update_layout(
+        title={
+            "text": "ORBITAL TELEMETRY  //  INERTIAL NAVIGATION",
+            "x": 0.035,
+            "font": {"size": 22, "color": PEARL, "family": "monospace"},
+        },
+        template="plotly_dark",
+        paper_bgcolor=BACKGROUND,
+        plot_bgcolor=PANEL,
+        font={"color": TEXT, "family": "monospace"},
+        height=1800,
+        margin={"l": 70, "r": 40, "t": 110, "b": 70},
+        hoverlabel={"bgcolor": PANEL, "bordercolor": PEARL, "font": {"color": TEXT}},
+        legend={"orientation": "h", "yanchor": "bottom", "y": 1.01, "xanchor": "right", "x": 1},
+    )
+    fig.add_annotation(
+        x=0.99,
+        y=0.985,
+        xref="paper",
+        yref="paper",
+        text="RED SHADING = GPS INVALID",
+        showarrow=False,
+        xanchor="right",
+        font={"color": RED, "size": 11, "family": "monospace"},
+    )
+    return fig
 
 
 def build_covariance_figure(df):
@@ -296,16 +551,11 @@ def build_covariance_figure(df):
         raise ValueError("Covariance data contains non-finite values")
 
     fig = make_subplots(
-        rows=3,
+        rows=2,
         cols=1,
-        specs=[[{"type": "xy"}], [{"type": "xy"}], [{"type": "scene"}]],
-        row_heights=[0.19, 0.19, 0.62],
-        vertical_spacing=0.08,
-        subplot_titles=[
-            "Position Variance",
-            "Velocity Variance",
-            "Animated 3σ Position Covariance Ellipsoid (local ECI offset)",
-        ],
+        row_heights=[0.5, 0.5],
+        vertical_spacing=0.12,
+        subplot_titles=["Position Variance", "Velocity Variance"],
     )
     axis_colors = [CYAN, GREEN, BLUE]
     axis_names = ["X", "Y", "Z"]
@@ -356,108 +606,6 @@ def build_covariance_figure(df):
             title_font={"color": TEXT},
         )
 
-    latitude = np.linspace(0.0, np.pi, 18)
-    longitude = np.linspace(0.0, 2.0 * np.pi, 36)
-    latitude_grid, longitude_grid = np.meshgrid(latitude, longitude, indexing="ij")
-    unit_x = np.sin(latitude_grid) * np.cos(longitude_grid)
-    unit_y = np.sin(latitude_grid) * np.sin(longitude_grid)
-    unit_z = np.cos(latitude_grid)
-    frame_indices = np.unique(
-        np.linspace(0, len(df) - 1, min(len(df), 120), dtype=int)
-    )
-    estimate_positions = df[
-        ["estimate_r_x_m", "estimate_r_y_m", "estimate_r_z_m"]
-    ].to_numpy()
-    if not np.isfinite(estimate_positions).all():
-        raise ValueError("Estimated position data contains non-finite values")
-
-    frames = []
-    initial_surface = None
-    for frame_index in frame_indices:
-        x, y, z = ellipsoid_surface(
-            covariance[frame_index, :3, :3], 3.0, unit_x, unit_y, unit_z
-        )
-        if initial_surface is None:
-            initial_surface = (x, y, z)
-        time_s = df["t_sec"].iloc[frame_index]
-        frames.append(
-            go.Frame(
-                name=f"{time_s:.2f}",
-                data=[
-                    go.Surface(
-                        x=x,
-                        y=y,
-                        z=z,
-                        colorscale=[[0.0, CYAN], [1.0, ORANGE]],
-                        opacity=0.72,
-                        showscale=False,
-                        hovertemplate=(
-                            "ΔX=%{x:.3f} m<br>ΔY=%{y:.3f} m"
-                            "<br>ΔZ=%{z:.3f} m<extra>3σ ellipsoid</extra>"
-                        ),
-                        name="3σ position ellipsoid",
-                    )
-                ],
-                traces=[6],
-            )
-        )
-
-    max_extent = max(
-        1.0,
-        max(
-            float(np.max(np.abs(points)))
-            for frame in frames
-            for points in (frame.data[0].x, frame.data[0].y, frame.data[0].z)
-        ),
-    )
-    fig.add_trace(
-        go.Scatter3d(
-            x=[0.0],
-            y=[0.0],
-            z=[0.0],
-            mode="markers",
-            marker={"color": AMBER, "size": 4},
-            name="Estimate center",
-            hovertemplate="Estimate center<br>Local ECI offset = 0<extra></extra>",
-        ),
-        row=3,
-        col=1,
-    )
-    fig.add_trace(
-        go.Surface(
-            x=initial_surface[0],
-            y=initial_surface[1],
-            z=initial_surface[2],
-            colorscale=[[0.0, CYAN], [1.0, ORANGE]],
-            opacity=0.72,
-            showscale=False,
-            name="3σ position ellipsoid",
-        ),
-        row=3,
-        col=1,
-    )
-    # The animated surface trace is index 7 after six variance traces and the center marker.
-    frames = [
-        go.Frame(name=frame.name, data=frame.data, traces=[7])
-        for frame in frames
-    ]
-    fig.frames = frames
-
-    slider_steps = [
-        {
-            "args": [
-                [frame.name],
-                {
-                    "mode": "immediate",
-                    "frame": {"duration": 0, "redraw": True},
-                    "transition": {"duration": 0},
-                },
-            ],
-            "label": f"{float(frame.name):.1f}",
-            "method": "animate",
-        }
-        for frame in frames
-    ]
     fig.update_layout(
         title={
             "text": "ORBITAL TELEMETRY  //  NAVIGATION COVARIANCE",
@@ -468,75 +616,9 @@ def build_covariance_figure(df):
         paper_bgcolor=BACKGROUND,
         plot_bgcolor=PANEL,
         font={"color": TEXT, "family": "monospace"},
-        height=1320,
+        height=820,
         margin={"l": 70, "r": 40, "t": 95, "b": 80},
         hoverlabel={"bgcolor": PANEL, "bordercolor": PEARL, "font": {"color": TEXT}},
-        scene={
-            "bgcolor": BACKGROUND,
-            "xaxis": {
-                "title": "Local ΔX (m)",
-                "range": [-max_extent, max_extent],
-                "backgroundcolor": PANEL,
-                "gridcolor": GRID,
-            },
-            "yaxis": {
-                "title": "Local ΔY (m)",
-                "range": [-max_extent, max_extent],
-                "backgroundcolor": PANEL,
-                "gridcolor": GRID,
-            },
-            "zaxis": {
-                "title": "Local ΔZ (m)",
-                "range": [-max_extent, max_extent],
-                "backgroundcolor": PANEL,
-                "gridcolor": GRID,
-            },
-            "aspectmode": "data",
-        },
-        updatemenus=[
-            {
-                "type": "buttons",
-                "showactive": False,
-                "x": 0.02,
-                "y": 0.02,
-                "buttons": [
-                    {
-                        "label": "▶ Play",
-                        "method": "animate",
-                        "args": [
-                            None,
-                            {
-                                "fromcurrent": True,
-                                "frame": {"duration": 100, "redraw": True},
-                                "transition": {"duration": 0},
-                            },
-                        ],
-                    },
-                    {
-                        "label": "⏸ Pause",
-                        "method": "animate",
-                        "args": [
-                            [None],
-                            {
-                                "mode": "immediate",
-                                "frame": {"duration": 0, "redraw": False},
-                                "transition": {"duration": 0},
-                            },
-                        ],
-                    },
-                ],
-            }
-        ],
-        sliders=[
-            {
-                "active": 0,
-                "x": 0.22,
-                "y": 0.02,
-                "len": 0.75,
-                "currentvalue": {"prefix": "Time (s): ", "font": {"color": AMBER}},
-                "steps": slider_steps,
-            }
-        ],
     )
     fig.update_annotations(font={"color": ORANGE, "size": 12, "family": "monospace"})
     return fig
@@ -544,7 +626,7 @@ def build_covariance_figure(df):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate interactive orbit, state, and covariance plots."
+        description="Generate interactive orbit, navigation, and covariance plots."
     )
     parser.add_argument("--input", type=Path, default=Path("output.tsfile"))
     parser.add_argument("--output", type=Path, default=Path("output.html"))
@@ -558,9 +640,28 @@ def main():
         "v_x_m_s",
         "v_y_m_s",
         "v_z_m_s",
+        "gps_time_s",
+        "gps_measurement_sampled",
+        "gps_measurement_updated",
+        "gps_r_x_ecef_m",
+        "gps_r_y_ecef_m",
+        "gps_r_z_ecef_m",
+        "gps_v_x_ecef_m_s",
+        "gps_v_y_ecef_m_s",
+        "gps_v_z_ecef_m_s",
+        "estimate_time_s",
         "estimate_r_x_m",
         "estimate_r_y_m",
         "estimate_r_z_m",
+        "estimate_v_x_m_s",
+        "estimate_v_y_m_s",
+        "estimate_v_z_m_s",
+        "estimate_r_x_ecef_m",
+        "estimate_r_y_ecef_m",
+        "estimate_r_z_ecef_m",
+        "estimate_v_x_ecef_m_s",
+        "estimate_v_y_ecef_m_s",
+        "estimate_v_z_ecef_m_s",
         *covariance_columns(),
     }
     from tsfile import TsFileReader
@@ -574,9 +675,28 @@ def main():
         "v_x_m_s",
         "v_y_m_s",
         "v_z_m_s",
+        "gps_time_s",
+        "gps_measurement_sampled",
+        "gps_measurement_updated",
+        "gps_r_x_ecef_m",
+        "gps_r_y_ecef_m",
+        "gps_r_z_ecef_m",
+        "gps_v_x_ecef_m_s",
+        "gps_v_y_ecef_m_s",
+        "gps_v_z_ecef_m_s",
+        "estimate_time_s",
         "estimate_r_x_m",
         "estimate_r_y_m",
         "estimate_r_z_m",
+        "estimate_v_x_m_s",
+        "estimate_v_y_m_s",
+        "estimate_v_z_m_s",
+        "estimate_r_x_ecef_m",
+        "estimate_r_y_ecef_m",
+        "estimate_r_z_ecef_m",
+        "estimate_v_x_ecef_m_s",
+        "estimate_v_y_ecef_m_s",
+        "estimate_v_z_ecef_m_s",
         *covariance_columns(),
     ]
     with TsFileReader(str(args.input)) as reader:
@@ -601,15 +721,25 @@ def main():
         raise ValueError(f"{args.input} contains no simulation samples")
     for column in required_columns:
         df[column] = pd.to_numeric(df[column], errors="raise").astype("float64")
+    df = df.sort_values("timestamp_ns").reset_index(drop=True)
+    if not np.isfinite(df[list(required_columns)].to_numpy()).all():
+        raise ValueError(f"{args.input} contains non-finite required telemetry values")
 
     plot_df = downsample_for_plotting(df)
     state_fig = build_state_figure(plot_df)
+    navigation_fig = build_navigation_figure(df)
     covariance_fig = build_covariance_figure(plot_df)
     state_html = state_fig.to_html(
         full_html=False,
         include_plotlyjs=True,
         config=PLOTLY_CONFIG,
         div_id="state-plot",
+    )
+    navigation_html = navigation_fig.to_html(
+        full_html=False,
+        include_plotlyjs=False,
+        config=PLOTLY_CONFIG,
+        div_id="navigation-plot",
     )
     covariance_html = covariance_fig.to_html(
         full_html=False,
@@ -638,10 +768,12 @@ body {{ margin: 0; background: {BACKGROUND}; color: {TEXT}; font-family: monospa
 <body>
 <nav class="tabs">
   <button class="tab-button active" data-tab="state-tab">STATE &amp; ORBIT</button>
+  <button class="tab-button" data-tab="navigation-tab">INERTIAL NAVIGATION</button>
   <button class="tab-button" data-tab="covariance-tab">COVARIANCE</button>
 </nav>
 <main>
   <section id="state-tab" class="tab-content active">{state_html}</section>
+  <section id="navigation-tab" class="tab-content">{navigation_html}</section>
   <section id="covariance-tab" class="tab-content">{covariance_html}</section>
 </main>
 <script>

@@ -16,9 +16,7 @@
 
 Eigen::Quaterniond getQuaternionECItoECEF(double t_J2000TT_s) {
     Eigen::Quaterniond qECItoECEF      = Eigen::Quaterniond::Identity();
-    // Generate z, theta, zeta [1] Sec 3.7 Eqn. 3-88
     double t_J2000_julianCenturies     = t_J2000TT_s / (86400.0 * 36525.0);
-
     double t_J2000_UT1_s               = t_J2000TT_s + flight_constants::kTTtoUT1Offset_s;
     double t_J2000_UT1_julianCenturies = t_J2000_UT1_s / (86400.0 * 36525.0);
 
@@ -61,11 +59,9 @@ Eigen::Quaterniond getQuaternionECItoECEF(double t_J2000TT_s) {
 
     double GAST                   = GMST + deltaPsi * cos(epsilon1980);
 
-    // Generate PNRW matrices [1] Sec 3.7 Algorithm 24
-    Eigen::Matrix3d precession    = rot3(z) * rot2(-Theta) * rot3(zeta);
+    Eigen::Matrix3d precession    = rot3(-z) * rot2(Theta) * rot3(-zeta);
     Eigen::Matrix3d nutation      = rot1(-epsilonTrue) * rot3(-deltaPsi) * rot1(epsilon1980);
     Eigen::Matrix3d rotation      = rot3(GAST);
-
     Eigen::Matrix3d DCM_ECItoECEF = rotation * nutation * precession;
     qECItoECEF                    = Eigen::Quaterniond(DCM_ECItoECEF);
 

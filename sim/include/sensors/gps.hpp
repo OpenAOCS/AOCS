@@ -9,6 +9,7 @@
 #include <vector>
 
 struct GPS_SensorMsg {
+    double t_J2000_s                                             = 0.0;
     Eigen::Vector3d r_sc_ecef_m                                  = Eigen::Vector3d::Zero();
     Eigen::Vector3d v_sc_ecef_m_s                                = Eigen::Vector3d::Zero();
     Eigen::Matrix<double, 6, 6, Eigen::RowMajor> covariance_ecef = Eigen::Matrix<double, 6, 6, Eigen::RowMajor>::Zero();

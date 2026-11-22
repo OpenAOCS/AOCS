@@ -141,7 +141,8 @@ void testGpsModelUsesConfiguredRtnAccuracy() {
     config.crossTrackAccuracy_m = 3.0;
     Simulation::Sensors::GPS gps(config);
     const SpacecraftState state{Eigen::Vector3d(7.0e6, 0.0, 0.0), Eigen::Vector3d(0.0, 7500.0, 0.0)};
-    const sensorMessage measurement = gps.measure(state, 100.0, 0.0);
+    constexpr double gpsTime_J2000_s = 746337600.0;
+    const sensorMessage measurement  = gps.measure(state, gpsTime_J2000_s, 0.0);
     const Eigen::Map<const Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> covariance(
         measurement.GPS_covariance_row_major.data());
     const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> positionEigenvalues(covariance.block<3, 3>(0, 0));
@@ -153,6 +154,22 @@ void testGpsModelUsesConfiguredRtnAccuracy() {
     require((covariance.block<3, 3>(3, 3) - Eigen::Matrix3d::Identity()).norm() < 1e-5,
             "GPS velocity covariance must preserve the existing placeholder");
     require(measurement.has_new_GPS_measurement == 1, "GPS model must mark a sampled measurement as new");
+    requireNear(measurement.GPS_time_J2000_s, gpsTime_J2000_s, 0.0, "GPS measurement timestamp must use J2000 seconds");
+    requireNear(measurement.aocs_time_J2000_s, gpsTime_J2000_s, 0.0, "AOCS state time must use J2000 seconds");
+    const Eigen::Vector3d measuredPositionEcef(measurement.GPS_position_ECEF_m[0], measurement.GPS_position_ECEF_m[1],
+                                               measurement.GPS_position_ECEF_m[2]);
+    const aocs::environment::JulianDate gpsTt = aocs::environment::JulianDate::fromJ2000Seconds(measurement.GPS_time_J2000_s);
+    const aocs::environment::JulianDate gpsUt1 =
+        aocs::environment::JulianDate::fromJ2000Seconds(measurement.GPS_time_J2000_s + SimConstants::kTTtoUT1Offset_s);
+    const Eigen::Matrix3d gpsEciToEcef         = aocs::environment::EarthRotation(gpsTt, gpsUt1).reduce().gcrsToItrs;
+    const Eigen::Vector3d recoveredPositionEci = gpsEciToEcef.transpose() * measuredPositionEcef;
+    require((recoveredPositionEci - state.position_eci_m).norm() < 50.0,
+            "GPS ECEF position must round-trip with the IAU2000B reduction within measurement noise");
+    const Eigen::Vector3d positionEcefFk5 =
+        getQuaternionECItoECEF(measurement.GPS_time_J2000_s).toRotationMatrix() * state.position_eci_m;
+    const double reductionDifference_m = (positionEcefFk5 - gpsEciToEcef * state.position_eci_m).norm();
+    requireNear(reductionDifference_m, 0.0, 10.0,
+                "FK5 and IAU2000B reductions must agree within a small time-aligned frame error");
 }
 
 void testSensorFaultValidityIsSharedAndIntervalBounded() {
@@ -176,7 +193,11 @@ void testSensorFaultValidityIsSharedAndIntervalBounded() {
     config.crossTrackAccuracy_m = 3.0;
     Simulation::Sensors::GPS gps(config, events);
     const SpacecraftState state{Eigen::Vector3d(7.0e6, 0.0, 0.0), Eigen::Vector3d(0.0, 7500.0, 0.0)};
-    require(gps.measure(state, 110.0, 10.0).has_new_GPS_measurement == 0, "An invalid GPS sample must not be published to GNC");
+    const sensorMessage invalidMeasurement = gps.measure(state, 110.0, 10.0);
+    require(invalidMeasurement.has_new_GPS_measurement == 0, "An invalid GPS sample must not be published to GNC");
+    requireNear(invalidMeasurement.GPS_time_J2000_s, 110.0, 0.0, "Invalid GPS attempts must still carry a J2000 timestamp");
+    requireNear(invalidMeasurement.aocs_time_J2000_s, 110.0, 0.0,
+                "Invalid GPS attempts must still carry the AOCS state time in J2000 seconds");
     require(gps.measure(state, 120.0, 20.0).has_new_GPS_measurement == 1,
             "GPS sampling must resume once the fault interval ends");
 }
@@ -224,7 +245,7 @@ void testSharedMemoryGncTransport() {
     sensorMessage input;
     input.GPS_position_ECEF_m         = {1.0, 2.0, 3.0};
     input.GPS_velocity_ECEF_m_s       = {4.0, 5.0, 6.0};
-    input.GPS_time_s                  = 7.0;
+    input.GPS_time_J2000_s            = 7.0;
     input.aocs_time_J2000_s           = 6.0;
     input.has_new_GPS_measurement     = 1;
     input.GPS_covariance_row_major[0] = 9.0;
@@ -233,7 +254,8 @@ void testSharedMemoryGncTransport() {
             "GNC entry point must receive the published GPS position");
     require(receivedSensorMessage.GPS_velocity_ECEF_m_s == input.GPS_velocity_ECEF_m_s,
             "GNC entry point must receive the published GPS velocity");
-    requireNear(receivedSensorMessage.GPS_time_s, input.GPS_time_s, 0.0, "GNC entry point must receive the published GPS time");
+    requireNear(receivedSensorMessage.GPS_time_J2000_s, input.GPS_time_J2000_s, 0.0,
+                "GNC entry point must receive the GPS timestamp in J2000 seconds");
     requireNear(receivedSensorMessage.GPS_covariance_row_major[0], input.GPS_covariance_row_major[0], 0.0,
                 "GNC entry point must receive the GPS covariance");
 }
@@ -265,7 +287,7 @@ void testGncStateEstimatePublication() {
     sharedMemoryMap memory{};
     sensorMessage& input          = memory.simMemoryRegion.sensorData;
     const double t_J2000_s        = 100.0;
-    input.GPS_time_s              = t_J2000_s + SimConstants::kGpsSecondsAtJ2000;
+    input.GPS_time_J2000_s        = t_J2000_s;
     input.aocs_time_J2000_s       = t_J2000_s;
     input.has_new_GPS_measurement = 1;
     input.GPS_position_ECEF_m     = {7000000.0, 1000.0, -2000.0};
@@ -326,7 +348,7 @@ void testGncStateEstimatePublication() {
             "Acceleration process noise must contribute to propagated velocity covariance");
 
     input.aocs_time_J2000_s       = t_J2000_s + 0.2;
-    input.GPS_time_s              = input.aocs_time_J2000_s + SimConstants::kGpsSecondsAtJ2000;
+    input.GPS_time_J2000_s        = input.aocs_time_J2000_s;
     input.has_new_GPS_measurement = 1;
     const double covarianceBeforeGpsUpdate =
         Eigen::Map<const Eigen::Matrix<double, 6, 6, Eigen::RowMajor>>(estimate.covariance_row_major.data())(0, 0);

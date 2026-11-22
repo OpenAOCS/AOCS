@@ -1,7 +1,5 @@
 #include "simulation/simulation.hpp"
 
-#include "sim_constants.hpp"
-
 #include <algorithm>
 
 namespace aocs::simulation {
@@ -13,7 +11,7 @@ sensorMessage Simulation::Sensors::GPS::measure(const SpacecraftState& state, do
         model_.measure(state.position_eci_m, state.velocity_eci_m_s, epoch_J2000_s, simulationTime_s);
 
     sensorMessage message;
-    message.GPS_time_s        = epoch_J2000_s + SimConstants::kGpsSecondsAtJ2000;
+    message.GPS_time_J2000_s  = epoch_J2000_s;
     message.aocs_time_J2000_s = epoch_J2000_s;
     if (!measurement.isValid) { return message; }
 

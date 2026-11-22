@@ -24,8 +24,12 @@ Requirements: CMake 3.20 or newer, a C++17 compiler, the JsonCpp and pybind11 de
 sudo apt-get update
 sudo apt-get install cmake g++ libjsoncpp-dev pybind11-dev python3-dev ninja-build
 ```
+For development, additionally clang tooling should be installed
+```sh
+sudo apt-get install clang-format clang-tidy clang-tools
+```
 
-From a fresh clone, configure and build with:
+With a new clone, configure and build with:  
 
 ```sh
 cmake -S . -B build -G Ninja
@@ -34,12 +38,9 @@ cmake --build build
 
 ## Before committing
 
-The checked-in [`.clang-format`](./.clang-format) is the style policy. Install
-`clang-format`, `clang-tidy`, and `clang-tools`, then configure a compile
-database and build the project targets:
+The checked-in [`.clang-format`](./.clang-format) is the style policy. To perform a clang review, rebuild with the compile commands flag on:  
 
 ```sh
-sudo apt-get install clang-format clang-tidy clang-tools
 cmake -S . -B build -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 cmake --build build --parallel 4 --target gnc_lib sim sim_math_tests aocs_orbit
 ```
@@ -53,13 +54,13 @@ python3 scripts/check_clang_tidy.py --build-dir build --jobs 4
 ctest --test-dir build --output-on-failure
 ```
 
-The clang-format script checks first-party C++ files, including non-ignored
-untracked files, and skips vendored Eigen under `shared/external/`. The
+The clang-format script skips vendored Eigen under `shared/external/`. The
 clang-tidy script runs each profile across its matching translation units in
 the compile database: [`gnc_lib/.clang-tidy`](./gnc_lib/.clang-tidy) for GNC and
-[`sim/.clang-tidy`](./sim/.clang-tidy) for the simulation and its tools. It
-does not analyze the separately configured Apache TsFile dependency. Findings
-are warnings, not build failures; GitHub Actions runs the same checks on pushes
+[`sim/.clang-tidy`](./sim/.clang-tidy) for the simulation and its tools. Findings
+are warnings, not build failures.  
+  
+GitHub Actions runs the same checks on pushes
 and pull requests. Use the same clang-format version locally and in CI.
 
 The optional CMake setting `-DAOCS_ENABLE_CLANG_TIDY=ON` also runs clang-tidy
@@ -71,41 +72,6 @@ Run the simulation from the repository root:
 ```sh
 ./build/sim/sim
 ```
-
-## Simulation and GNC interface
-
-The simulation initializes persistent GNC state once with
-`aocs::initializeGnc()`, then publishes GPS position, velocity, time, and
-measurement covariance to POSIX shared memory before calling
-`aocs::runGncStep()` each simulation step. The GNC boundary maps shared-memory
-messages into internal navigation inputs, evaluates the GNC state machine,
-and calls the navigation step. Navigation owns the orbit-determination
-instance, initializes from the first GPS measurement, and propagates the
-estimate between measurements. The boundary maps the resulting ECI state and
-6x6 covariance back into `sharedMemoryMap::aocsMemoryRegion.navigationEstimate`;
-the message's `valid` field indicates whether the estimate is usable. Guidance
-and control steps are not implemented yet. The simulation currently supplies
-the configured radial, in-track, and cross-track GPS position accuracies;
-velocity covariance remains an identity placeholder. `Simulation` owns its
-environment, sensors (including GPS), and actuators, and advances the state
-with RK4 in `Simulation::Step()`. Configuration is parsed into typed nested
-structures before constructing those components. Actuators retain body-frame
-force and torque sums; rotational dynamics are not modeled yet. Message layouts
-are split by flow: `sim_to_aocs.hpp` defines simulation inputs,
-`aocs_to_sim.hpp` defines GNC outputs, and `ipc.hpp` provides shared-memory
-transport. `Simulation::Sensors::GPS` composes the GPS-specific `GPS_Sensor`,
-which derives from the shared `Sensor` validity base. Scenario fault intervals
-apply by sensor type; invalid GPS samples are sent as no-new-measurement input.
-`sim/main.cpp` owns simulation orchestration, while `sim/environment.cpp`
-computes environmental forces for propagation.
-The GNC acceleration process-noise spectral density is configured internally
-in [`gnc_config.hpp`](./gnc_lib/gnc_config.hpp), in radial, transverse, and
-normal (RTN) order. The current `[1e-4, 1e-2, 1e-4] m²/s³` values are
-provisional tuning values, not a sensor-certified specification.
-
-The shared-memory transport is synchronous and in-process for now; a future
-UDP transport can implement the same interface when GNC runs in a separate
-container.
 
 ## Analysis
 
@@ -123,21 +89,6 @@ Install requirements
 pip install -r requirements.txt
 ```
 
-The default simulation runs for two initial-condition orbital periods. It
-propagates the true state at 100 Hz and runs the AOCS loop at 10 Hz, while GPS
-measurements are sampled at 1 Hz and held between updates. The output
-`output.tsfile` is recorded at 10 Hz and includes the state estimate and full
-6x6 estimate covariance at each log step. TsFile timestamps are Unix-epoch
-nanoseconds; the `t_sec` field remains elapsed simulation seconds. CMake
-fetches Apache TsFile v2.5.0 for the native writer, and the Python `tsfile`
-package reads it into a pandas DataFrame for plotting. Configure
-`true_state_rate_hz`, `aocs_rate_hz`, and `log_rate_hz` under `simulation`,
-GPS rate and position accuracies under `spacecraft.sensors.gps`, and an optional
-scenario name under `simulation.scenario_config` in `config.json`. Scenario
-fault intervals are defined in `sim/scenarios/<name>.yaml`. The true-state
-rate must be an integer multiple of the AOCS and log rates, and the AOCS rate
-must be an integer multiple of the GPS rate.
-
 After running the simulation, generate the interactive report from the
 repository root:
 
@@ -145,11 +96,14 @@ repository root:
 python plotting/plot_results.py
 ```
 
-The first HTML tab contains the 3D ECI orbit, position and velocity time
-series in three columns, and the six osculating-element plots. The covariance
-tab plots position and velocity variances and animates the 3σ position
-covariance ellipsoid in a local offset frame. The plotter calls the
-`aocs_orbit` pybind11 module, which invokes the C++
+The report contains STATE & ORBIT, INERTIAL NAVIGATION, and COVARIANCE tabs.
+The first tab contains the 3D ECI orbit, position and velocity time series in
+three columns, and the six osculating-element plots. The navigation tab
+compares raw GPS readings with the filtered estimate in ECEF, highlights
+invalid GPS intervals in red, and plots ECI estimate-versus-truth errors. The
+covariance tab plots position and velocity variances. Regenerate the simulation
+TsFile before plotting so it includes the GPS and ECEF estimate telemetry.
+The plotter calls the `aocs_orbit` pybind11 module, which invokes the C++
 `IJKKeplerian::convert_ijk_to_keplerian` function for each state vector.
 Angular elements are converted from radians to degrees.
 
@@ -159,7 +113,7 @@ Angular elements are converted from radians to degrees.
 Week 1: Inertial Nav & EKF MVP
 ├── High-Fidelity GPS
 │   ├── <del>GPS Sensor Model</del>
-│   └── Sensor Invalid Feature (General)
+│   └── <del>Sensor Invalid Feature (General)<del>
 └── EKF MVP Architecture
     ├── <del>Process Noise</del>
     └── Increased STM fidelity - exponential drag, J2, Vallado Sun/Moon Ephem
