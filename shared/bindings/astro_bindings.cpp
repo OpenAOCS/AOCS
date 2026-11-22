@@ -5,8 +5,8 @@
 
 namespace py = pybind11;
 
-py::array_t<double> convertIJKToKeplerianSeries(py::array_t<double, py::array::c_style | py::array::forcecast> positions,
-                                                py::array_t<double, py::array::c_style | py::array::forcecast> velocities) {
+py::array_t<double> convertIJKToKeplerianSeries(const py::array_t<double, py::array::c_style | py::array::forcecast>& positions,
+                                                const py::array_t<double, py::array::c_style | py::array::forcecast>& velocities) {
     if (positions.ndim() != 2 || positions.shape(1) != 3 || velocities.ndim() != 2 || velocities.shape(1) != 3) {
         throw std::invalid_argument("positions and velocities must both have shape (N, 3)");
     }

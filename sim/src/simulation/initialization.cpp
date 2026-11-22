@@ -155,7 +155,7 @@ Simulation::Config readConfiguration(const Json::Value& document) {
 
     const Json::Value simulation = requireMember(document, "simulation", "config");
     if (simulation.isMember("scenario_config")) {
-        const Json::Value scenarioName = simulation["scenario_config"];
+        const Json::Value& scenarioName = simulation["scenario_config"];
         if (!scenarioName.isString()) { throw std::invalid_argument("simulation.scenario_config must be a string"); }
         config.sensors.events = loadScenarioEvents(scenarioName.asString());
     }
