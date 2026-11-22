@@ -53,6 +53,8 @@ field indicates whether the estimate is usable. Guidance and control steps
 are not implemented yet. The simulation currently supplies an identity GPS
 measurement covariance as a placeholder; replace it with the sensor model's
 covariance when available.
+`sim/main.cpp` owns simulation orchestration, while `sim/environment.cpp`
+computes environmental forces for propagation.
 The GNC acceleration process-noise spectral density is configured internally
 in [`gnc_config.hpp`](./gnc_lib/gnc_config.hpp), in radial, transverse, and
 normal (RTN) order. The current `[1e-4, 1e-2, 1e-4] m²/s³` values are
@@ -80,10 +82,14 @@ pip install -r requirements.txt
 
 The default simulation runs for two initial-condition orbital periods. It
 propagates the true state at 100 Hz and runs the AOCS loop at 10 Hz, while GPS
-measurements are sampled at 1 Hz and held between updates. The output CSV is
-recorded at 10 Hz and includes the state estimate and full 6x6 estimate
-covariance at each log step. Configure `true_state_rate_hz`, `aocs_rate_hz`,
-`log_rate_hz`, and `gps_rate_hz` under `simulation` in `config.json`. The
+measurements are sampled at 1 Hz and held between updates. The output
+`output.tsfile` is recorded at 10 Hz and includes the state estimate and full
+6x6 estimate covariance at each log step. TsFile timestamps are Unix-epoch
+nanoseconds; the `t_sec` field remains elapsed simulation seconds. CMake
+fetches Apache TsFile v2.5.0 for the native writer, and the Python `tsfile`
+package reads it into a pandas DataFrame for plotting. Configure
+`true_state_rate_hz`, `aocs_rate_hz`, `log_rate_hz`, and `gps_rate_hz` under
+`simulation` in `config.json`. The
 true-state rate must be an integer multiple of the AOCS and log rates, and the
 AOCS rate must be an integer multiple of the GPS rate.
 

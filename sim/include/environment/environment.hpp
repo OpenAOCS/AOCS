@@ -1,9 +1,12 @@
 #pragma once
 
+#include "simulation/initialization.hpp"
+
 namespace aocs::simulation {
 
-struct Simulation;
-
-int runEnvironment(Simulation& simulation);
+Eigen::Vector3d computeEnvironmentalForceEci(
+    const Simulation& simulation,
+    const SpacecraftState& state,
+    double elapsedTime_s);
 
 } // namespace aocs::simulation

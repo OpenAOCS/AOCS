@@ -4,10 +4,13 @@
 #include "simulation/simulation.hpp"
 #include <chrono>
 #include <cstdint>
-#include <fstream>
 #include <memory>
 
 namespace aocs::simulation {
+
+namespace data {
+class FileWriter;
+}
 
 struct Simulation {
     Propagation propagation;
@@ -26,8 +29,10 @@ struct Simulation {
     std::uint32_t gravityOrder = 0;
     std::unique_ptr<EGM2008Coefficients> egm2008;
     std::unique_ptr<Gravity> gravity;
-    std::ofstream outputFile;
+    std::unique_ptr<data::FileWriter> outputFile;
     bool running = true;
+
+    ~Simulation();
 };
 
 std::unique_ptr<Simulation> initializeSimulation();

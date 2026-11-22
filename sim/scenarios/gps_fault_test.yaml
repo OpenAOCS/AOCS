@@ -4,6 +4,6 @@ Scenario:
     events:
       simulation_time: 1800
       type: sensor_fault
-      sensor: gps
+      sensor: gps           # for now, assuming only one GPS sensor is possible to exist on a spacecraft
       fault_type: invalid
       duration: 600

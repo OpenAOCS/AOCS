@@ -3,5 +3,6 @@ numpy==2.5.4
 packaging==26.3
 pandas==3.1.1
 plotly==7.1.0
+tsfile==2.5.0
 python-dateutil==4.0.0
 tzdata==2026.6

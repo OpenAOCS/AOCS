@@ -1,17 +1,36 @@
 #pragma once
 
+#include <Eigen/Dense>
 #include "ipc.hpp"
+#include <cstdint>
+#include <memory>
+#include <string>
 
 namespace aocs::simulation {
 
-struct Simulation;
-
 namespace data {
 
-void writeState(
-    Simulation& simulation,
-    const sensorMessage& sensors,
-    const navigationEstimateMessage& estimate);
+class FileWriter {
+public:
+    explicit FileWriter(const std::string& path);
+    ~FileWriter();
+
+    FileWriter(const FileWriter&) = delete;
+    FileWriter& operator=(const FileWriter&) = delete;
+
+    void writeState(
+        double epoch_J2000_s,
+        double elapsedTime_s,
+        const Eigen::Vector3d& position_eci_m,
+        const Eigen::Vector3d& velocity_eci_m_s,
+        const sensorMessage& sensors,
+        const navigationEstimateMessage& estimate);
+    void close();
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
 
 } // namespace data
 } // namespace aocs::simulation

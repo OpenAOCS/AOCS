@@ -546,7 +546,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Generate interactive orbit, state, and covariance plots."
     )
-    parser.add_argument("--input", type=Path, default=Path("output.csv"))
+    parser.add_argument("--input", type=Path, default=Path("output.tsfile"))
     parser.add_argument("--output", type=Path, default=Path("output.html"))
     args = parser.parse_args()
 
@@ -563,7 +563,34 @@ def main():
         "estimate_r_z_m",
         *covariance_columns(),
     }
-    df = pd.read_csv(args.input)
+    from tsfile import TsFileReader
+
+    tsfile_columns = [
+        "simulation_id",
+        "t_sec",
+        "r_x_m",
+        "r_y_m",
+        "r_z_m",
+        "v_x_m_s",
+        "v_y_m_s",
+        "v_z_m_s",
+        "estimate_r_x_m",
+        "estimate_r_y_m",
+        "estimate_r_z_m",
+        *covariance_columns(),
+    ]
+    with TsFileReader(str(args.input)) as reader:
+        with reader.query_table("simulation", tsfile_columns) as result:
+            df = result.read_data_frame(max_row_num=sys.maxsize)
+
+    time_column = next(
+        (column for column in df.columns if column.lower() == "time"), None
+    )
+    if time_column is None:
+        raise ValueError(f"{args.input} does not contain TsFile timestamps")
+    df["timestamp_ns"] = pd.to_numeric(df.pop(time_column), errors="raise").astype(
+        "int64"
+    )
     missing_columns = required_columns.difference(df.columns)
     if missing_columns:
         raise ValueError(
@@ -572,6 +599,8 @@ def main():
         )
     if df.empty:
         raise ValueError(f"{args.input} contains no simulation samples")
+    for column in required_columns:
+        df[column] = pd.to_numeric(df[column], errors="raise").astype("float64")
 
     plot_df = downsample_for_plotting(df)
     state_fig = build_state_figure(plot_df)

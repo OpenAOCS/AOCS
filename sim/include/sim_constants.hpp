@@ -29,4 +29,6 @@ public:
 
     
     static constexpr double kGpsSecondsAtJ2000 = 630763200.0;
+    static constexpr long double kUnixSecondsAtJ2000 = 946728000.0L;
+    static constexpr long double kNanosecondsPerSecond = 1000000000.0L;
 };

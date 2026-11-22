@@ -1,10 +1,11 @@
 #include "simulation/initialization.hpp"
+#include "data/file_writer.hpp"
 #include "sim_constants.hpp"
 #include <json/reader.h>
 #include <json/value.h>
 #include <cmath>
 #include <exception>
-#include <iomanip>
+#include <fstream>
 #include <iostream>
 #include <limits>
 #include <string>
@@ -33,6 +34,8 @@ bool readVector3(
 }
 
 } // namespace
+
+Simulation::~Simulation() = default;
 
 std::unique_ptr<Simulation> initializeSimulation() {
     std::ifstream configFile("config.json");
@@ -209,22 +212,14 @@ std::unique_ptr<Simulation> initializeSimulation() {
     simulation->gravity =
         std::make_unique<Gravity>(simulation->egm2008.get());
 
-    simulation->outputFile.open("output.csv");
-    if (!simulation->outputFile) {
-        std::cerr << "Unable to open output.csv for writing\n";
+    try {
+        simulation->outputFile =
+            std::make_unique<data::FileWriter>("output.tsfile");
+    } catch (const std::exception& error) {
+        std::cerr << "Unable to create output.tsfile: "
+                  << error.what() << '\n';
         return nullptr;
     }
-    simulation->outputFile
-        << "t_sec,r_x_m,r_y_m,r_z_m,v_x_m_s,v_y_m_s,v_z_m_s,"
-        << "gps_time_s,gps_measurement_updated,"
-        << "estimate_time_s,estimate_r_x_m,estimate_r_y_m,estimate_r_z_m,"
-        << "estimate_v_x_m_s,estimate_v_y_m_s,estimate_v_z_m_s";
-    for (std::size_t row = 0; row < 6; ++row) {
-        for (std::size_t col = 0; col < 6; ++col) {
-            simulation->outputFile << ",cov_" << row << '_' << col;
-        }
-    }
-    simulation->outputFile << '\n' << std::setprecision(10);
 
     return simulation;
 }

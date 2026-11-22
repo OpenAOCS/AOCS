@@ -5,6 +5,57 @@ add_executable(sim
     data/file_writer.cpp
     data/telemetry_writer.cpp
 )
+set_property(TARGET sim PROPERTY CXX_STANDARD 17)
+
+include(FetchContent)
+include(ExternalProject)
+
+if(POLICY CMP0169)
+    cmake_policy(SET CMP0169 OLD)
+endif()
+FetchContent_Declare(
+    apache_tsfile
+    GIT_REPOSITORY https://github.com/apache/tsfile.git
+    GIT_TAG v2.5.0
+    GIT_SHALLOW TRUE
+)
+# TsFile's CMake assumes its source tree is the top-level project.
+FetchContent_GetProperties(apache_tsfile)
+if(NOT apache_tsfile_POPULATED)
+    FetchContent_Populate(apache_tsfile)
+endif()
+
+set(APACHE_TSFILE_BINARY_DIR "${CMAKE_BINARY_DIR}/apache_tsfile-build")
+set(APACHE_TSFILE_LIBRARY "${APACHE_TSFILE_BINARY_DIR}/lib/libtsfile.so")
+ExternalProject_Add(apache_tsfile_build
+    SOURCE_DIR "${apache_tsfile_SOURCE_DIR}/cpp"
+    BINARY_DIR "${APACHE_TSFILE_BINARY_DIR}"
+    CMAKE_ARGS
+        "-DCMAKE_BUILD_TYPE=Release"
+        "-DTSFILE_BUILD_SHARED=ON"
+        "-DBUILD_TEST=OFF"
+        "-DBUILD_TOOLS=OFF"
+        "-DBUILD_BENCHMARK=OFF"
+        "-DENABLE_ANTLR4=OFF"
+        "-DENABLE_SNAPPY=OFF"
+        "-DENABLE_LZ4=OFF"
+        "-DENABLE_LZOKAY=OFF"
+        "-DENABLE_ZLIB=OFF"
+        "-DENABLE_ZSTD=OFF"
+        "-DENABLE_LZMA2=OFF"
+        "-DENABLE_SIMD=OFF"
+    BUILD_COMMAND
+        "${CMAKE_COMMAND}" --build <BINARY_DIR> --target tsfile --config Release --parallel 4
+    BUILD_BYPRODUCTS "${APACHE_TSFILE_LIBRARY}"
+    INSTALL_COMMAND ""
+)
+add_library(tsfile SHARED IMPORTED GLOBAL)
+set_target_properties(tsfile PROPERTIES
+    IMPORTED_LOCATION "${APACHE_TSFILE_LIBRARY}"
+    INTERFACE_INCLUDE_DIRECTORIES "${apache_tsfile_SOURCE_DIR}/cpp/src"
+)
+add_dependencies(sim apache_tsfile_build)
+set_property(TARGET sim APPEND PROPERTY BUILD_RPATH "${APACHE_TSFILE_BINARY_DIR}/lib")
 
 configure_file(${PROJECT_SOURCE_DIR}/config.json config.json COPYONLY)
 
@@ -21,7 +72,7 @@ target_include_directories(sim PRIVATE
     ${PROJECT_SOURCE_DIR}/shared
     ${EIGEN_INCLUDE_DIR}
 )
-target_link_libraries(sim PRIVATE gnc_lib)
+target_link_libraries(sim PRIVATE gnc_lib tsfile)
 
 find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
