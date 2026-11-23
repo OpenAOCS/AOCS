@@ -44,13 +44,29 @@ void OrbitDetermination::PropagateInertialState(InertialStateEstimate& state, do
     if (!std::isfinite(angularMomentumMagnitude) || angularMomentumMagnitude <= 0.0) {
         throw std::invalid_argument("RTN process noise requires nonzero orbital angular momentum");
     }
+    using State6d = Eigen::Matrix<double, 6, 1>;
 
-    const Eigen::Matrix<double, 3, 1> vec3_a_sc_eci =
-        -flight_constants::kEarthMu * positionAtStart_eci_m / (radius_m * radius_m * radius_m);
+    State6d x0;
+    x0.head<3>() = positionAtStart_eci_m;
+    x0.tail<3>() = velocityAtStart_eci_m_s;
 
-    state.vec3_r_sc_eci           = positionAtStart_eci_m + velocityAtStart_eci_m_s * elapsedTime_s;
-    state.vec3_v_sc_eci           = velocityAtStart_eci_m_s + vec3_a_sc_eci * elapsedTime_s;
-    state.t_estimate_J2000_s      = t_end_J2000_s;
+    const auto deriv = [](double /*t_s*/, const State6d& x) -> State6d {
+        const Eigen::Vector3d r_eci = x.head<3>();
+        const double r_norm         = r_eci.norm();
+        const double inv_r3         = 1.0 / (r_norm * r_norm * r_norm);
+
+        State6d dx;
+        dx.head<3>() = x.tail<3>();
+        dx.tail<3>() = -flight_constants::kEarthMu * inv_r3 * r_eci;
+        return dx;
+    };
+
+    State6d x_next;
+    rk4_step(x0, t_start_J2000_s, elapsedTime_s, deriv, rk4Workspace, x_next);
+
+    state.vec3_r_sc_eci      = x_next.head<3>();
+    state.vec3_v_sc_eci      = x_next.tail<3>();
+    state.t_estimate_J2000_s = t_end_J2000_s;
 
     const double radiusSquared_m2 = radius_m * radius_m;
     const double radiusCubed_m3   = radiusSquared_m2 * radius_m;

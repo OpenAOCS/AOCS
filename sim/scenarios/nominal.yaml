@@ -1,0 +1,4 @@
+Scenario:
+    name: nominal
+    description: "Nominal scenario with no faults"
+    events: []

@@ -4,6 +4,8 @@
 
 #include <Eigen/Dense>
 
+#include <math/RK4.hpp>
+
 namespace aocs::navigation {
 
 using StateCovariance = Eigen::Matrix<double, 6, 6, Eigen::RowMajor>;
@@ -34,6 +36,7 @@ class OrbitDetermination {
     OrbitDeterminationMethod method;
     Eigen::Vector3d accelerationProcessNoiseSpectralDensityRTN_m2_s3;
     InertialStateEstimate inertialState;
+    Rk4Workspace<Eigen::Matrix<double, 6, 1>> rk4Workspace{6};
 };
 
 } // namespace aocs::navigation

@@ -307,29 +307,19 @@ def build_navigation_figure(df):
     truth_times_s = df["t_sec"].to_numpy()
     estimate_times_s = df["estimate_time_s"].to_numpy()
     truth_columns = [
-        "r_x_m",
-        "r_y_m",
-        "r_z_m",
-        "v_x_m_s",
-        "v_y_m_s",
-        "v_z_m_s",
+        "r_x_m", "r_y_m", "r_z_m",
+        "v_x_m_s", "v_y_m_s", "v_z_m_s",
     ]
     estimate_columns = [
-        "estimate_r_x_m",
-        "estimate_r_y_m",
-        "estimate_r_z_m",
-        "estimate_v_x_m_s",
-        "estimate_v_y_m_s",
-        "estimate_v_z_m_s",
+        "estimate_r_x_m", "estimate_r_y_m", "estimate_r_z_m",
+        "estimate_v_x_m_s", "estimate_v_y_m_s", "estimate_v_z_m_s",
     ]
     truth_state = df[truth_columns].to_numpy()
     estimate_state = df[estimate_columns].to_numpy()
-    truth_at_estimate_times = np.column_stack(
-        [
-            np.interp(estimate_times_s, truth_times_s, truth_state[:, component])
-            for component in range(6)
-        ]
-    )
+    truth_at_estimate_times = np.column_stack([
+        np.interp(estimate_times_s, truth_times_s, truth_state[:, component])
+        for component in range(6)
+    ])
     state_error = estimate_state - truth_at_estimate_times
 
     navigation_df = df.copy()
@@ -341,52 +331,51 @@ def build_navigation_figure(df):
     navigation_df["eci_velocity_error_norm_m_s"] = np.linalg.norm(state_error[:, 3:], axis=1)
     plot_df = downsample_for_plotting(navigation_df)
 
+    covariance = plot_df[covariance_columns()].to_numpy().reshape(-1, 6, 6)
+    if not np.isfinite(covariance).all():
+        raise ValueError("Covariance data contains non-finite values")
+
     valid_gps_samples = df.loc[
         df["gps_measurement_sampled"].astype(bool) & df["gps_measurement_updated"].astype(bool)
     ]
     position_gps_columns = ["gps_r_x_ecef_m", "gps_r_y_ecef_m", "gps_r_z_ecef_m"]
     position_estimate_columns = [
-        "estimate_r_x_ecef_m",
-        "estimate_r_y_ecef_m",
-        "estimate_r_z_ecef_m",
+        "estimate_r_x_ecef_m", "estimate_r_y_ecef_m", "estimate_r_z_ecef_m",
     ]
     velocity_gps_columns = ["gps_v_x_ecef_m_s", "gps_v_y_ecef_m_s", "gps_v_z_ecef_m_s"]
     velocity_estimate_columns = [
-        "estimate_v_x_ecef_m_s",
-        "estimate_v_y_ecef_m_s",
-        "estimate_v_z_ecef_m_s",
+        "estimate_v_x_ecef_m_s", "estimate_v_y_ecef_m_s", "estimate_v_z_ecef_m_s",
     ]
     fig = make_subplots(
-        rows=8,
+        rows=6,
         cols=1,
         shared_xaxes=True,
-        row_heights=[0.105] * 6 + [0.185] * 2,
+        row_heights=[0.16, 0.16, 0.16, 0.16, 0.18, 0.18],
         vertical_spacing=0.025,
         subplot_titles=[
-            "ECEF Position X",
-            "ECEF Position Y",
-            "ECEF Position Z",
-            "ECEF Velocity X",
-            "ECEF Velocity Y",
-            "ECEF Velocity Z",
+            "ECEF Position",
+            "ECEF Velocity",
             "ECI Position Error (Estimate − Truth)",
             "ECI Velocity Error (Estimate − Truth)",
+            "Position Covariance",
+            "Velocity Covariance",
         ],
     )
     axis_colors = [CYAN, GREEN, BLUE]
+
     for axis, (axis_name, color) in enumerate(zip(axis_names, axis_colors)):
         fig.add_trace(
             go.Scatter(
                 x=valid_gps_samples["gps_time_s"],
                 y=valid_gps_samples[position_gps_columns[axis]],
                 mode="markers",
-                marker={"color": ORANGE, "size": 4, "opacity": 0.7},
-                name="Raw GPS",
-                legendgroup="gps",
-                showlegend=axis == 0,
+                marker={"color": color, "size": 4, "opacity": 0.55, "symbol": "circle-open"},
+                name=f"GPS {axis_name}",
+                legendgroup=f"position-{axis_name}",
+                showlegend=True,
                 hovertemplate="%{x:.2f} s<br>%{y:.3f} m<extra>GPS ECEF</extra>",
             ),
-            row=axis + 1,
+            row=1,
             col=1,
         )
         fig.add_trace(
@@ -395,12 +384,12 @@ def build_navigation_figure(df):
                 y=plot_df[position_estimate_columns[axis]],
                 mode="lines",
                 line={"color": color, "width": 1.5},
-                name="Filtered estimate",
-                legendgroup="estimate",
-                showlegend=axis == 0,
+                name=f"Estimate {axis_name}",
+                legendgroup=f"position-{axis_name}",
+                showlegend=True,
                 hovertemplate="%{x:.2f} s<br>%{y:.3f} m<extra>Estimate ECEF</extra>",
             ),
-            row=axis + 1,
+            row=1,
             col=1,
         )
         fig.add_trace(
@@ -408,13 +397,13 @@ def build_navigation_figure(df):
                 x=valid_gps_samples["gps_time_s"],
                 y=valid_gps_samples[velocity_gps_columns[axis]],
                 mode="markers",
-                marker={"color": ORANGE, "size": 4, "opacity": 0.7},
-                name="Raw GPS velocity",
-                legendgroup="gps",
-                showlegend=False,
+                marker={"color": color, "size": 4, "opacity": 0.55, "symbol": "circle-open"},
+                name=f"GPS V{axis_name}",
+                legendgroup=f"velocity-{axis_name}",
+                showlegend=True,
                 hovertemplate="%{x:.2f} s<br>%{y:.6f} m/s<extra>GPS ECEF</extra>",
             ),
-            row=axis + 4,
+            row=2,
             col=1,
         )
         fig.add_trace(
@@ -423,16 +412,14 @@ def build_navigation_figure(df):
                 y=plot_df[velocity_estimate_columns[axis]],
                 mode="lines",
                 line={"color": color, "width": 1.5},
-                name="Filtered estimate velocity",
-                legendgroup="estimate",
-                showlegend=False,
+                name=f"Estimate V{axis_name}",
+                legendgroup=f"velocity-{axis_name}",
+                showlegend=True,
                 hovertemplate="%{x:.2f} s<br>%{y:.6f} m/s<extra>Estimate ECEF</extra>",
             ),
-            row=axis + 4,
+            row=2,
             col=1,
         )
-
-    for axis, (axis_name, color) in enumerate(zip(axis_names, axis_colors)):
         fig.add_trace(
             go.Scatter(
                 x=plot_df["estimate_time_s"],
@@ -442,7 +429,7 @@ def build_navigation_figure(df):
                 name=f"Δ{axis_name}",
                 hovertemplate="%{x:.2f} s<br>%{y:.3f} m<extra>ECI position error</extra>",
             ),
-            row=7,
+            row=3,
             col=1,
         )
         fig.add_trace(
@@ -454,67 +441,65 @@ def build_navigation_figure(df):
                 name=f"ΔV{axis_name}",
                 hovertemplate="%{x:.2f} s<br>%{y:.6f} m/s<extra>ECI velocity error</extra>",
             ),
-            row=8,
+            row=4,
             col=1,
         )
-    fig.add_trace(
-        go.Scatter(
-            x=plot_df["estimate_time_s"],
-            y=plot_df["eci_position_error_norm_m"],
-            mode="lines",
-            line={"color": AMBER, "width": 2},
-            name="Position error norm",
-            hovertemplate="%{x:.2f} s<br>%{y:.3f} m<extra>ECI position error norm</extra>",
-        ),
-        row=7,
-        col=1,
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=plot_df["estimate_time_s"],
-            y=plot_df["eci_velocity_error_norm_m_s"],
-            mode="lines",
-            line={"color": AMBER, "width": 2},
-            name="Velocity error norm",
-            hovertemplate="%{x:.2f} s<br>%{y:.6f} m/s<extra>ECI velocity error norm</extra>",
-        ),
-        row=8,
-        col=1,
-    )
+        fig.add_trace(
+            go.Scatter(
+                x=plot_df["t_sec"],
+                y=covariance[:, axis, axis],
+                mode="lines",
+                line={"color": color, "width": 1.5},
+                name=f"P{axis_name}{axis_name}",
+                hovertemplate="%{x:.1f} s<br>%{y:.6g} m²<extra></extra>",
+            ),
+            row=5,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=plot_df["t_sec"],
+                y=covariance[:, axis + 3, axis + 3],
+                mode="lines",
+                line={"color": color, "width": 1.5},
+                name=f"V{axis_name}{axis_name}",
+                hovertemplate="%{x:.1f} s<br>%{y:.6g} (m/s)²<extra></extra>",
+            ),
+            row=6,
+            col=1,
+        )
 
-    for row in range(1, 9):
+    fig.add_trace(go.Scatter(
+        x=plot_df["estimate_time_s"], y=plot_df["eci_position_error_norm_m"],
+        mode="lines", line={"color": AMBER, "width": 2}, name="Position error norm",
+        hovertemplate="%{x:.2f} s<br>%{y:.3f} m<extra>ECI position error norm</extra>",
+    ), row=3, col=1)
+    fig.add_trace(go.Scatter(
+        x=plot_df["estimate_time_s"], y=plot_df["eci_velocity_error_norm_m_s"],
+        mode="lines", line={"color": AMBER, "width": 2}, name="Velocity error norm",
+        hovertemplate="%{x:.2f} s<br>%{y:.6f} m/s<extra>ECI velocity error norm</extra>",
+    ), row=4, col=1)
+
+    for row in range(1, 7):
         fig.update_xaxes(
-            title_text="Time (s)" if row == 8 else None,
-            gridcolor=GRID,
-            zerolinecolor=GRID,
-            linecolor=GRID,
-            tickfont={"color": TEXT},
-            title_font={"color": TEXT},
-            row=row,
-            col=1,
+            title_text="Time (s)" if row == 6 else None,
+            gridcolor=GRID, zerolinecolor=GRID, linecolor=GRID,
+            tickfont={"color": TEXT}, title_font={"color": TEXT},
+            row=row, col=1,
         )
-        unit = "m" if row <= 3 or row == 7 else "m/s"
+        unit = "m" if row in (1, 3, 5) else "m/s" if row in (2, 4) else "(m/s)²"
+        if row == 5:
+            unit = "m²"
         fig.update_yaxes(
-            title_text=unit,
-            gridcolor=GRID,
-            zerolinecolor=GRID,
-            linecolor=GRID,
-            tickfont={"color": TEXT},
-            title_font={"color": TEXT},
-            row=row,
-            col=1,
+            title_text=unit, gridcolor=GRID, zerolinecolor=GRID, linecolor=GRID,
+            tickfont={"color": TEXT}, title_font={"color": TEXT},
+            row=row, col=1,
         )
     for start_time_s, end_time_s in gps_invalid_intervals(df):
-        for row in range(1, 7):
+        for row in range(1, 5):
             fig.add_vrect(
-                x0=start_time_s,
-                x1=end_time_s,
-                fillcolor=RED,
-                opacity=0.18,
-                line_width=0,
-                layer="below",
-                row=row,
-                col=1,
+                x0=start_time_s, x1=end_time_s, fillcolor=RED,
+                opacity=0.18, line_width=0, layer="below", row=row, col=1,
             )
 
     fig.update_layout(
@@ -523,110 +508,24 @@ def build_navigation_figure(df):
             "x": 0.035,
             "font": {"size": 22, "color": PEARL, "family": "monospace"},
         },
-        template="plotly_dark",
-        paper_bgcolor=BACKGROUND,
-        plot_bgcolor=PANEL,
+        template="plotly_dark", paper_bgcolor=BACKGROUND, plot_bgcolor=PANEL,
         font={"color": TEXT, "family": "monospace"},
-        height=1800,
-        margin={"l": 70, "r": 40, "t": 110, "b": 70},
+        height=1500, margin={"l": 70, "r": 40, "t": 110, "b": 70},
         hoverlabel={"bgcolor": PANEL, "bordercolor": PEARL, "font": {"color": TEXT}},
         legend={"orientation": "h", "yanchor": "bottom", "y": 1.01, "xanchor": "right", "x": 1},
     )
     fig.add_annotation(
-        x=0.99,
-        y=0.985,
-        xref="paper",
-        yref="paper",
-        text="RED SHADING = GPS INVALID",
-        showarrow=False,
-        xanchor="right",
+        x=0.99, y=0.985, xref="paper", yref="paper",
+        text="RED SHADING = GPS INVALID", showarrow=False, xanchor="right",
         font={"color": RED, "size": 11, "family": "monospace"},
     )
     return fig
 
 
-def build_covariance_figure(df):
-    covariance = df[covariance_columns()].to_numpy().reshape(-1, 6, 6)
-    if not np.isfinite(covariance).all():
-        raise ValueError("Covariance data contains non-finite values")
-
-    fig = make_subplots(
-        rows=2,
-        cols=1,
-        row_heights=[0.5, 0.5],
-        vertical_spacing=0.12,
-        subplot_titles=["Position Variance", "Velocity Variance"],
-    )
-    axis_colors = [CYAN, GREEN, BLUE]
-    axis_names = ["X", "Y", "Z"]
-    for axis in range(3):
-        fig.add_trace(
-            go.Scatter(
-                x=df["t_sec"],
-                y=covariance[:, axis, axis],
-                mode="lines",
-                line={"color": axis_colors[axis], "width": 1.5},
-                name=f"P{axis_names[axis]}{axis_names[axis]}",
-                hovertemplate="%{x:.1f} s<br>%{y:.6g} m²<extra></extra>",
-            ),
-            row=1,
-            col=1,
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=df["t_sec"],
-                y=covariance[:, axis + 3, axis + 3],
-                mode="lines",
-                line={"color": axis_colors[axis], "width": 1.5},
-                name=f"V{axis_names[axis]}{axis_names[axis]}",
-                hovertemplate="%{x:.1f} s<br>%{y:.6g} (m/s)²<extra></extra>",
-            ),
-            row=2,
-            col=1,
-        )
-    for row, unit in ((1, "m²"), (2, "(m/s)²")):
-        fig.update_xaxes(
-            title_text="Time (s)",
-            row=row,
-            col=1,
-            gridcolor=GRID,
-            zerolinecolor=GRID,
-            linecolor=GRID,
-            tickfont={"color": TEXT},
-            title_font={"color": TEXT},
-        )
-        fig.update_yaxes(
-            title_text=unit,
-            row=row,
-            col=1,
-            gridcolor=GRID,
-            zerolinecolor=GRID,
-            linecolor=GRID,
-            tickfont={"color": TEXT},
-            title_font={"color": TEXT},
-        )
-
-    fig.update_layout(
-        title={
-            "text": "ORBITAL TELEMETRY  //  NAVIGATION COVARIANCE",
-            "x": 0.035,
-            "font": {"size": 22, "color": PEARL, "family": "monospace"},
-        },
-        template="plotly_dark",
-        paper_bgcolor=BACKGROUND,
-        plot_bgcolor=PANEL,
-        font={"color": TEXT, "family": "monospace"},
-        height=820,
-        margin={"l": 70, "r": 40, "t": 95, "b": 80},
-        hoverlabel={"bgcolor": PANEL, "bordercolor": PEARL, "font": {"color": TEXT}},
-    )
-    fig.update_annotations(font={"color": ORANGE, "size": 12, "family": "monospace"})
-    return fig
-
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate interactive orbit, navigation, and covariance plots."
+        description="Generate interactive orbit and navigation plots."
     )
     parser.add_argument("--input", type=Path, default=Path("output.tsfile"))
     parser.add_argument("--output", type=Path, default=Path("output.html"))
@@ -728,7 +627,6 @@ def main():
     plot_df = downsample_for_plotting(df)
     state_fig = build_state_figure(plot_df)
     navigation_fig = build_navigation_figure(df)
-    covariance_fig = build_covariance_figure(plot_df)
     state_html = state_fig.to_html(
         full_html=False,
         include_plotlyjs=True,
@@ -740,12 +638,6 @@ def main():
         include_plotlyjs=False,
         config=PLOTLY_CONFIG,
         div_id="navigation-plot",
-    )
-    covariance_html = covariance_fig.to_html(
-        full_html=False,
-        include_plotlyjs=False,
-        config=PLOTLY_CONFIG,
-        div_id="covariance-plot",
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
@@ -769,12 +661,10 @@ body {{ margin: 0; background: {BACKGROUND}; color: {TEXT}; font-family: monospa
 <nav class="tabs">
   <button class="tab-button active" data-tab="state-tab">STATE &amp; ORBIT</button>
   <button class="tab-button" data-tab="navigation-tab">INERTIAL NAVIGATION</button>
-  <button class="tab-button" data-tab="covariance-tab">COVARIANCE</button>
 </nav>
 <main>
   <section id="state-tab" class="tab-content active">{state_html}</section>
   <section id="navigation-tab" class="tab-content">{navigation_html}</section>
-  <section id="covariance-tab" class="tab-content">{covariance_html}</section>
 </main>
 <script>
 document.querySelectorAll('.tab-button').forEach((button) => {{

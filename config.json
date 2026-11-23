@@ -5,7 +5,7 @@
             "v0_sc_eci_m": [0, 5.5e3, 5.5e3],
             "t_J2000_s": 746337600.0
         },
-        "scenario_config": "gps_fault_test",
+        "scenario_config": "nominal",
         "orbit_count": 2,
         "true_state_rate_hz": 100,
         "aocs_rate_hz": 10,

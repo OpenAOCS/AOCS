@@ -1,6 +1,6 @@
 #pragma once
 
-#include "common/randomMatrix.hpp"
+#include "common/random_matrix.hpp"
 #include "sensors/sensor.hpp"
 
 #include <Eigen/Dense>

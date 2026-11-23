@@ -96,7 +96,6 @@ std::vector<SensorEvent> loadScenarioEvents(const std::string& scenarioName) {
 
     bool inEvents            = false;
     std::size_t eventsIndent = 0;
-    bool foundEvents         = false;
     std::map<std::string, std::string> fields;
     std::vector<SensorEvent> events;
     const auto finishEvent = [&] {
@@ -113,10 +112,14 @@ std::vector<SensorEvent> loadScenarioEvents(const std::string& scenarioName) {
         if (content.empty() || content.front() == '#') { continue; }
 
         if (!inEvents) {
-            if (content == "events:") {
-                inEvents     = true;
-                foundEvents  = true;
-                eventsIndent = indent;
+            if (content.rfind("events:", 0) == 0) {
+                const std::string value = trim(content.substr(std::string("events:").size()));
+                if (value.empty()) {
+                    inEvents     = true;
+                    eventsIndent = indent;
+                } else if (value != "[]") {
+                    throw std::invalid_argument("Malformed scenario events list");
+                }
             }
             continue;
         }
@@ -146,7 +149,6 @@ std::vector<SensorEvent> loadScenarioEvents(const std::string& scenarioName) {
     }
     finishEvent();
 
-    if (!foundEvents) { throw std::invalid_argument("Scenario file is missing events"); }
     return events;
 }
 
