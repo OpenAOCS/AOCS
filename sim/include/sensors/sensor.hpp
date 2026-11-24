@@ -10,7 +10,7 @@
 class Sensor {
   public:
     struct SensorConfig {
-      Eigen::Vector3d position = Eigen::Vector3d::Zero();
+      Eigen::Vector3d position_ = Eigen::Vector3d::Zero();
       Eigen::Matrix3d dcm_sensor_sf_wrt_bf_bf = Eigen::Matrix3d::Identity(); // DCM from sensor frame to body frame
       SensorEventSensor sensor_ = SensorEventSensor::GPS;
     };
@@ -20,7 +20,7 @@ class Sensor {
 
     bool isValidAt(double simulationTime_s) const;
 
-    Eigen::Vector3d getPosition() const { return config_.position; }
+    Eigen::Vector3d getPosition() const { return config_.position_; }
     Eigen::Matrix3d getDCMSensorSFwrtBFbf() const { return config_.dcm_sensor_sf_wrt_bf_bf; }
 
   private:

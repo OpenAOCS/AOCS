@@ -27,6 +27,7 @@ class GPS_Sensor : public Sensor {
 
         GPSConfig() { sensor_ = SensorEventSensor::GPS; }
     };
+    using Config = GPSConfig;
 
     GPS_Sensor(const GPSConfig& config, const std::vector<SensorEvent>& events);
 
