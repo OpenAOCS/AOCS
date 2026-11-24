@@ -47,8 +47,8 @@ void OrbitDetermination::PropagateInertialState(InertialStateEstimate& state, do
     using State6d = Eigen::Matrix<double, 6, 1>;
 
     State6d x0;
-    x0.head<3>() = positionAtStart_eci_m;
-    x0.tail<3>() = velocityAtStart_eci_m_s;
+    x0.head<3>()     = positionAtStart_eci_m;
+    x0.tail<3>()     = velocityAtStart_eci_m_s;
 
     const auto deriv = [](double /*t_s*/, const State6d& x) -> State6d {
         const Eigen::Vector3d r_eci = x.head<3>();
@@ -64,9 +64,9 @@ void OrbitDetermination::PropagateInertialState(InertialStateEstimate& state, do
     State6d x_next;
     rk4_step(x0, t_start_J2000_s, elapsedTime_s, deriv, rk4Workspace, x_next);
 
-    state.vec3_r_sc_eci      = x_next.head<3>();
-    state.vec3_v_sc_eci      = x_next.tail<3>();
-    state.t_estimate_J2000_s = t_end_J2000_s;
+    state.vec3_r_sc_eci           = x_next.head<3>();
+    state.vec3_v_sc_eci           = x_next.tail<3>();
+    state.t_estimate_J2000_s      = t_end_J2000_s;
 
     const double radiusSquared_m2 = radius_m * radius_m;
     const double radiusCubed_m3   = radiusSquared_m2 * radius_m;

@@ -6,13 +6,12 @@
 
 #include <vector>
 
-
 class Sensor {
   public:
     struct SensorConfig {
-      Eigen::Vector3d position_ = Eigen::Vector3d::Zero();
-      Eigen::Matrix3d dcm_sensor_sf_wrt_bf_bf = Eigen::Matrix3d::Identity(); // DCM from sensor frame to body frame
-      SensorEventSensor sensor_ = SensorEventSensor::GPS;
+        Eigen::Vector3d position_               = Eigen::Vector3d::Zero();
+        Eigen::Matrix3d dcm_sensor_sf_wrt_bf_bf = Eigen::Matrix3d::Identity(); // DCM from sensor frame to body frame
+        SensorEventSensor sensor_               = SensorEventSensor::GPS;
     };
 
     Sensor(const Sensor::SensorConfig& config, const std::vector<SensorEvent>& events);
