@@ -3,7 +3,7 @@
 #include <cmath>
 #include <stdexcept>
 
-Sensor::Sensor(SensorEventSensor sensor, const std::vector<SensorEvent>& events) : sensor_(sensor), events_(events) {
+Sensor::Sensor(const SensorConfig& config, const std::vector<SensorEvent>& events) : config_(config), events_(events) {
     for (const SensorEvent& event : events_) {
         if (!std::isfinite(event.t_eventStart_sim_s) || !std::isfinite(event.t_eventEnd_sim_s) ||
             event.t_eventStart_sim_s < 0.0 || event.t_eventEnd_sim_s <= event.t_eventStart_sim_s) {
@@ -23,7 +23,7 @@ bool Sensor::isValidAt(double simulationTime_s) const {
 
     const SensorEvent* activeEvent = nullptr;
     for (const SensorEvent& event : events_) {
-        if (event.sensor == sensor_ && simulationTime_s >= event.t_eventStart_sim_s &&
+        if (event.sensor == config_.sensor_ && simulationTime_s >= event.t_eventStart_sim_s &&
             simulationTime_s < event.t_eventEnd_sim_s &&
             (!activeEvent || event.t_eventStart_sim_s >= activeEvent->t_eventStart_sim_s)) {
             activeEvent = &event;

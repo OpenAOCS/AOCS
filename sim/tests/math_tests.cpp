@@ -178,8 +178,12 @@ void testSensorFaultValidityIsSharedAndIntervalBounded() {
 
     const std::vector<SensorEvent> events{
         {SensorEventSensor::GPS, SensorEventType::fault, SensorEventValid::Invalid, 10.0, 20.0}};
-    Sensor gpsBase(SensorEventSensor::GPS, events);
-    Sensor imuBase(SensorEventSensor::IMU, events);
+    Sensor::SensorConfig gpsConfig;
+    gpsConfig.sensor_ = SensorEventSensor::GPS;
+    Sensor::SensorConfig imuConfig;
+    imuConfig.sensor_ = SensorEventSensor::IMU;
+    Sensor gpsBase(gpsConfig, events);
+    Sensor imuBase(imuConfig, events);
     require(gpsBase.isValidAt(9.999), "A sensor must be valid before its fault interval");
     require(!gpsBase.isValidAt(10.0) && !gpsBase.isValidAt(19.999),
             "A scheduled sensor fault must invalidate the sensor in its interval");

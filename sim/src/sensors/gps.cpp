@@ -6,8 +6,8 @@
 #include <cmath>
 #include <stdexcept>
 
-GPS_Sensor::GPS_Sensor(const Config& config, const std::vector<SensorEvent>& events)
-    : Sensor(SensorEventSensor::GPS, events), config_(config), noise_matrix_(noise_, config.randomSeed) {
+GPS_Sensor::GPS_Sensor(const GPSConfig& config, const std::vector<SensorEvent>& events)
+    : Sensor(config, events), config_(config), noise_matrix_(noise_, config.randomSeed) {
     const Eigen::Vector3d accuracy(config_.radialAccuracy_m, config_.inTrackAccuracy_m, config_.crossTrackAccuracy_m);
     if (!std::isfinite(config_.rate_Hz) || config_.rate_Hz <= 0.0 || !accuracy.allFinite() || (accuracy.array() <= 0.0).any() ||
         !(accuracy.array().square().isFinite()).all()) {

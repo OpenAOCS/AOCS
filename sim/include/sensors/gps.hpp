@@ -18,15 +18,17 @@ struct GPS_SensorMsg {
 
 class GPS_Sensor : public Sensor {
   public:
-    struct Config {
+    struct GPSConfig : Sensor::SensorConfig {
         double rate_Hz              = 0.0;
         double radialAccuracy_m     = 0.0;
         double inTrackAccuracy_m    = 0.0;
         double crossTrackAccuracy_m = 0.0;
         std::uint64_t randomSeed    = 1;
+
+        GPSConfig() { sensor_ = SensorEventSensor::GPS; }
     };
 
-    GPS_Sensor(const Config& config, const std::vector<SensorEvent>& events);
+    GPS_Sensor(const GPSConfig& config, const std::vector<SensorEvent>& events);
 
     double rate_Hz() const { return config_.rate_Hz; }
 
@@ -34,7 +36,7 @@ class GPS_Sensor : public Sensor {
                           double simulationTime_s);
 
   private:
-    Config config_;
+    GPSConfig config_;
     Eigen::Matrix<double, 6, 1> noise_{};
     RandomMatrix<double, 6, 1> noise_matrix_;
 };
